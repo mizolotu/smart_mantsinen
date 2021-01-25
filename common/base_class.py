@@ -954,7 +954,7 @@ class ActorCriticRLModel(BaseRLModel):
                              "Stored kwargs: {}, specified kwargs: {}".format(data['policy_kwargs'],
                                                                               kwargs['policy_kwargs']))
 
-        model = cls(policy=data["policy"], env=None, _init_setup_model=False)
+        model = cls(policy=data["policy"], env=None, runner=data['runner'], _init_setup_model=False)
         model.__dict__.update(data)
         model.__dict__.update(kwargs)
         model.set_env(env)
