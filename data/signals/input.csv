@@ -1,0 +1,9 @@
+DI_Machine_Bus_Aux3_RPDO1_boY46_HybLiftCylLoc,0.0,700.0
+AI_UnderCar_Bus_SimSta1_u16Boom1Cur,-800.0,800.0
+AI_UnderCar_Bus_SimSta1_u16Boom2Cur,-800.0,800.0
+AI_Machine_Bus_Aux1_RPDO1_u16Y49_BoomLc,100.0,800.0
+AI_UnderCar_Bus_SimSta3_u16Stick1Cur,-800.0,800.0
+AI_UnderCar_Bus_SimSta3_u16Stick1Cur_Y15,-800.0,800.0
+AI_UnderCar_Bus_SimSta3_u16Stick2Cur,-800.0,800.0
+AI_Machine_Bus_Aux1_RPDO1_u16Y50_StickLc,100.0,800.0
+AI_PowerUnit_Bus_PU2_RPDO1_u16Y63_Swing,-1340.0,1340.0
