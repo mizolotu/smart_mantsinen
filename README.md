@@ -1,4 +1,4 @@
-# Smart Mantsinen 2020-2021
+# Smart Mantsinen
 
 ## Requirements
 
