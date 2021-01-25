@@ -1,1 +1,1 @@
-# Mantsinen2020
+# Mantsinen
