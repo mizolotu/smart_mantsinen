@@ -43,7 +43,12 @@ python standardize_data.py
 
 ## Training
 
-1. Start or continue training the PPO agent:
+1. From "SmartMantsinen" directory start the server script, if it has not yet started: 
+```bash
+python env_server.py
+```
+
+2. Start or continue training the PPO agent:
 
 ```bash
 python train_baseline.py -m <path_to_mantsinen_model> 
@@ -54,7 +59,7 @@ python train_baseline.py -m <path_to_mantsinen_model>
 1. Model checkpoints are created via default callback which runs every few steps, unnecessary checkpoints can be removed as follows:
 
 ```bash
-python train_baseline.py -m <path_to_mantsinen_model> 
+python train_baseline.py -c <path_to_checkpoint_directory> 
 ```
 
 After that, only the checkpoint with the latest date and the checkpoint with tha maximum training steps will remain. 
