@@ -36,7 +36,7 @@ python env_server.py
 ```bash
 python process_trajectory.py -m <path_to_mantsinen_model> -o <output_file>
 ```
-3. (Optional) Calculate minimum and maximum data values if needed:
+3. Update minimum and maximum data values for input, output and reward signals:
 ```bash
 python standardize_data.py
 ```
