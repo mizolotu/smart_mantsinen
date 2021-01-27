@@ -1,4 +1,4 @@
-# Smart Mantsinen
+# Smart Mantsinen (work in progress)
 
 ## Requirements
 
@@ -41,8 +41,20 @@ python process_trajectory.py -m <path_to_mantsinen_model> -o <output_file>
 python standardize_data.py
 ```
 
-## Behavioral clonning
+## Training
 
-## Reinforcement learning
+1. Start or continue training the PPO agent:
 
-## Learning from demonstration
+```bash
+python train_baseline.py -m <path_to_mantsinen_model> 
+```
+
+## Postprocessing
+
+1. Model checkpoints are created via default callback which runs every few steps, unnecessary checkpoints can be removed as follows:
+
+```bash
+python train_baseline.py -m <path_to_mantsinen_model> 
+```
+
+After that, only the checkpoint with the latest date and the checkpoint with tha maximum training steps will remain. 
