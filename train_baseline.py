@@ -10,10 +10,11 @@ from common.policies import MlpPolicy
 from common.mevea_vec_env import MeveaVecEnv
 from common.runners import MeveaRunner
 from common.model_utils import find_checkpoint_with_max_step
+from common.data_utils import prepare_trajectories
 from common.callbacks import CheckpointCallback
 
-def make_env(env_class, mevea_model, signal_csv, identical_signals, trajectory_csv, server_url, frequency):
-    fn = lambda: env_class(mevea_model, signal_csv, identical_signals, trajectory_csv, server_url, frequency)
+def make_env(env_class, mevea_model, signal_csv, identical_signals, trajectory_csv, server_url, frequency, use_signals):
+    fn = lambda: env_class(mevea_model, signal_csv, identical_signals, trajectory_csv, server_url, frequency, use_signals)
     return fn
 
 if __name__ == '__main__':
@@ -21,17 +22,22 @@ if __name__ == '__main__':
     # parameters
 
     trajectory_dir = 'data/trajectory_examples'
+
     signal_csv = {
         'input': 'data/signals/input.csv',
         'output': 'data/signals/output.csv',
         'reward': 'data/signals/reward.csv'
     }
+
     identical_signals = {
         'AI_UnderCar_Bus_SimSta1_u16Boom1Cur': ['AI_UnderCar_Bus_SimSta1_u16Boom2Cur'],
         'AI_UnderCar_Bus_SimSta3_u16Stick1Cur': ['AI_UnderCar_Bus_SimSta3_u16Stick1Cur_Y15', 'AI_UnderCar_Bus_SimSta3_u16Stick2Cur']
     }
+
     nsteps = 100000000
     sleep_interval = 3
+    use_signals = False
+    dt = 0.01
 
     # process arguments
 
@@ -49,16 +55,20 @@ if __name__ == '__main__':
         print('Start the server: python3 env_server.py')
         sleep(sleep_interval)
 
-    # create environments
+    # prepare training data
 
     trajectory_files = [osp.join(trajectory_dir, fpath) for fpath in args.trajectories.split(',')]
-    env_fns = [make_env(MantsinenBasic, args.model, signal_csv, identical_signals, fpath, args.server, args.frequency) for fpath in trajectory_files]
+    trajectory_data = prepare_trajectories(signal_csv, identical_signals, trajectory_files, dt, use_signals=use_signals)
+
+    # create environments
+
+    env_fns = [make_env(MantsinenBasic, args.model, signal_csv, identical_signals, data, args.server, args.frequency, use_signals) for data in trajectory_data]
     env = MeveaVecEnv(env_fns)
 
     # create model
 
     try:
-        checkpoint_file = find_checkpoint_with_max_step('{0}/checkpoints/'.format(args.output))
+        checkpoint_file = find_checkpoint_with_max_step('{0}/model_checkpoints/'.format(args.output))
         model = ppo.load(checkpoint_file)
         model.set_env(env)
         print('Model has been successfully loaded from {0}'.format(checkpoint_file))
@@ -67,9 +77,7 @@ if __name__ == '__main__':
         fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
         print(exc_type, fname, exc_tb.tb_lineno)
         model = ppo(MlpPolicy, env, runner=MeveaRunner, verbose=1)
+        model.pretrain(trajectory_data, n_epochs=1000)
     finally:
         checkpoint_callback = CheckpointCallback(save_freq=2048, save_path='{0}/model_checkpoints/'.format(args.output))
         model.learn(total_timesteps=nsteps, callback=[checkpoint_callback])
-
-    model = ppo(MlpPolicy, env, MeveaRunner, verbose=1)
-    model.learn(total_timesteps=nsteps)
