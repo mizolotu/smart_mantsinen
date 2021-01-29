@@ -275,7 +275,8 @@ class MeveaRunner(AbstractEnvRunner):
         ep_infos = []
         scores = [[] for _ in range(self.n_envs)]
         for _ in range(self.n_steps):
-            actions, values, self.states, neglogpacs = self.model.step(self.obs, self.states, self.dones)
+            #actions, values, self.states, neglogpacs = self.model.step(self.obs, self.states, self.dones)
+            actions, values, self.states, neglogpacs = self.model.step(self.obs, self.states, self.dones, deterministic=True)
             mb_obs.append(self.obs.copy())
             mb_actions.append(actions)
             mb_values.append(values)

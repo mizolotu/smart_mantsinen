@@ -2,38 +2,39 @@ import gym, requests
 import numpy as np
 
 from time import sleep, time
-from common.data_utils import load_signals, load_trajectory, adjust_indexes
+from common.data_utils import load_signals, parse_conditional_signals
 from common.server_utils import post_signals, get_state, set_action
 
 class MantsinenBasic(gym.Env):
 
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, mvs, signal_csv, identical_input_signals, trajectory_data, server_url, frequency, dt, use_signals=False, binary_signals=[0]):
+    def __init__(self, mvs, signal_dir, trajectory_data, server_url, maxtime, use_signals=False):
 
         # init params
 
         self.mvs = mvs
         self.id = None
         self.server = server_url
-        self.act_freq = frequency
-        self.dt = dt
+        self.maxtime = maxtime
         self.use_signals = use_signals
-        self.binary_signals = binary_signals
 
         # load signals and their limits
 
         self.signals, mins, maxs = {}, {}, {}
-        for key in signal_csv.keys():
-            values, xmin, xmax = load_signals(signal_csv[key])
+        for key in ['input', 'output', 'reward']:
+            values, xmin, xmax = load_signals(signal_dir, key)
             self.signals[key] = values
             mins[key] = xmin
             maxs[key] = xmax
 
+        values = load_signals(signal_dir, 'conditional')
+        self.signals['conditional'] = values[0]
+        self.conditional_signals = parse_conditional_signals(values, self.signals['input'])
+
         # deal with identical signals
 
-        obs_input_idx, self.act_idx = adjust_indexes(self.signals, identical_input_signals)
-        self.obs_index = np.append(obs_input_idx, np.arange(len(self.signals['input']), len(self.signals['input']) + len(self.signals['output'])))
+        self.obs_index = np.arange(len(self.signals['input']) + len(self.signals['output']))
 
         # dimensions and standardization coefficients
 
@@ -43,14 +44,14 @@ class MantsinenBasic(gym.Env):
         self.rew_max = np.array(maxs['reward'])
         obs_min = np.hstack([self.rew_min, self.rew_min, self.rew_min, self.rew_min])
         obs_max = np.hstack([self.rew_max, self.rew_max, self.rew_max, self.rew_max])
-        self.obs_input_output_min = np.hstack([np.array(mins['input'])[obs_input_idx], mins['output']])
-        self.obs_input_output_max = np.hstack([np.array(maxs['input'])[obs_input_idx], maxs['output']])
+        self.obs_input_output_min = np.hstack([np.array(mins['input']), mins['output']])
+        self.obs_input_output_max = np.hstack([np.array(maxs['input']), maxs['output']])
         if use_signals:
             obs_dim += len(self.obs_index)
             obs_min = np.append(obs_min, self.obs_input_output_min)
             obs_max = np.append(obs_max, self.obs_input_output_max)
-        act_dim = len(obs_input_idx)
-        self.act_min, self.act_max = np.array(mins['input'])[obs_input_idx], np.array(maxs['input'])[obs_input_idx]
+        act_dim = len(self.signals['input'])
+        self.act_min, self.act_max = np.array(mins['input']), np.array(maxs['input'])
 
         # extract data from the trajectory
 
@@ -70,27 +71,18 @@ class MantsinenBasic(gym.Env):
         self.observation_space = gym.spaces.Box(low=obs_min, high=obs_max, shape=(obs_dim,), dtype=np.float)
         self.action_space = gym.spaces.Box(low=-1, high=1, shape=(act_dim,), dtype=np.float)
 
-        # tmp
-
-        self.actions = []
-
     def reset(self):
-        print(len(self.actions))
-        with open('tmp/actions_in_{0}.txt'.format(self.id), 'w') as f:
-            for action in self.actions:
-                line = ','.join([str(item) for item in action])
-                f.write(line + '\n')
         post_signals(self.server, self.id, self.signals)
         input_output_obs, reward_components = [], []
         while len(input_output_obs) == 0 or len(reward_components) == 0:
-            sleep(self.act_freq)
+            sleep(self.maxtime)
             input_output_obs, reward_components = self._get_state()
         t_now = time()
         real_xyz = self._std_vector(reward_components, self.rew_min, self.rew_max)
         self.start_time = t_now
         t_elapsed_from_the_start = t_now - self.start_time
         target_xyz = self._predict_xyz(t_elapsed_from_the_start)
-        next_target_xyz = self._predict_xyz(t_elapsed_from_the_start + self.dt)
+        next_target_xyz = self._predict_xyz(t_elapsed_from_the_start + self.maxtime)
         obs = np.hstack([real_xyz, target_xyz, real_xyz, next_target_xyz])
         if self.use_signals:
             obs = np.append(obs, self._std_vector(np.array(input_output_obs)[self.obs_index], self.obs_input_output_min, self.obs_input_output_max))
@@ -102,15 +94,14 @@ class MantsinenBasic(gym.Env):
     def step(self, action):
         action = self._std_vector(action, self.action_space.low, self.action_space.high)
         action = self._orig_vector(action, self.act_min, self.act_max)
-        self._set_action(action[self.act_idx])
-        sleep(self.act_freq)
+        self._set_action(action)
         input_output_obs, reward_components = self._get_state()
         t_now = time()
         t_elapsed_from_start = t_now - self.start_time
         t_elapsed_from_last_step = t_now - self.last_time
         real_xyz = self._std_vector(reward_components, self.rew_min, self.rew_max)
         target_xyz = self._predict_xyz(t_elapsed_from_start)
-        next_target_xyz = self._predict_xyz(t_elapsed_from_start + self.dt)
+        next_target_xyz = self._predict_xyz(t_elapsed_from_start + self.maxtime)
         obs = np.hstack([real_xyz, target_xyz, self.last_reward_components, next_target_xyz])
         if self.use_signals:
             obs = np.append(obs, self._std_vector(np.array(input_output_obs)[self.obs_index], self.obs_input_output_min, self.obs_input_output_max))
@@ -125,18 +116,25 @@ class MantsinenBasic(gym.Env):
         pass
 
     def _get_state(self):
-        obs, reward_components, t_state = get_state(self.server, self.id)
+        obs, reward_components, _, t_state = get_state(self.server, self.id)
         return obs, reward_components
 
     def _set_action(self, action):
-        action_list = []
-        for ai, a in enumerate(action):
-            if ai in self.binary_signals:
-                action_list.append(self.act_min[ai] + (self.act_max[ai] - self.act_min[ai]) * np.round((a - self.act_min[ai]) / (self.act_max[ai] - self.act_min[ai])))
-            else:
-                action_list.append(a)
-        self.actions.append(action_list)
-        set_action(self.server, self.id, action_list)
+        conditional = []
+        for signal in self.conditional_signals:
+            if signal['type'] == 'unconditional':
+                conditional.append(signal['value'])
+            elif signal['type'] == 'conditional':
+                idx = self.signals['input'].index(signal['condition'])
+                if action[idx] > self.act_min[idx]:
+                    value = signal['value']
+                else:
+                    value = 0
+                conditional.append(value)
+            elif signal['type'] == 'identical':
+                idx = self.signals['input'].index(signal['value'])
+                conditional.append(action[idx])
+        set_action(self.server, self.id, action.tolist(), conditional)
 
     def _std_vector(self, vector, xmin, xmax, eps=1e-10):
         vector = (vector - xmin) / (xmax - xmin + eps)

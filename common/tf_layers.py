@@ -42,7 +42,7 @@ def ortho_init(scale=1.0):
     return _ortho_init
 
 
-def mlp(input_tensor, layers, activ_fn=tf.nn.relu, layer_norm=False):
+def mlp(input_tensor, layers, activ_fn=tf.nn.relu, layer_norm=True):
     """
     Create a multi-layer fully connected neural network.
 

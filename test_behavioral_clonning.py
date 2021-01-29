@@ -1,5 +1,6 @@
-import argparse, os, sys
+import argparse, pandas
 import os.path as osp
+import numpy as np
 
 from env_frontend import MantsinenBasic
 from common.server_utils import is_server_running
@@ -8,9 +9,7 @@ from baselines.ppo2.ppo2 import PPO2 as ppo
 from common.policies import MlpPolicy
 from common.mevea_vec_env import MeveaVecEnv
 from common.runners import MeveaRunner
-from common.model_utils import find_checkpoint_with_max_step
-from common.data_utils import prepare_trajectories
-from common.callbacks import CheckpointCallback
+from common.data_utils import prepare_trajectories, load_signals
 
 def make_env(env_class, mevea_model, signal_dir, trajectory_data, server_url, frequency, use_signals):
     fn = lambda: env_class(mevea_model, signal_dir, trajectory_data, server_url, frequency, use_signals)
@@ -53,30 +52,34 @@ if __name__ == '__main__':
     env_fns = [make_env(MantsinenBasic, args.model, signal_dir, data, args.server, args.frequency, use_signals) for data in trajectory_data]
     env = MeveaVecEnv(env_fns)
 
-    try:
+    # create model
 
-        # load model
+    model = ppo(MlpPolicy, env, runner=MeveaRunner, verbose=1)
 
-        checkpoint_file = find_checkpoint_with_max_step('{0}/model_checkpoints/'.format(args.output))
-        model = ppo.load(checkpoint_file)
-        model.set_env(env)
-        print('Model has been successfully loaded from {0}'.format(checkpoint_file))
+    # pretrain model
 
-    except Exception as e:
+    model.pretrain(trajectory_data, n_epochs=100)
 
-        exc_type, exc_obj, exc_tb = sys.exc_info()
-        fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-        print(exc_type, fname, exc_tb.tb_lineno)
+    # check actions after pretraining for validation purposes
 
-        # create and pretrain model
+    input_signals, mins, maxs = load_signals(signal_dir, 'input')
+    mins = np.array(mins)
+    maxs = np.array(maxs)
+    header = ['Timestamp', *input_signals]
+    actions = [header]
+    traj = trajectory_data[0]
+    actions = [header]
+    traj = trajectory_data[0]
+    for i in range(len(traj)):
+        t = traj[i, -1]
+        obs = traj[i, :model.env.observation_space.shape[0]]
+        a = model.predict(obs)[0]
+        a = (a + 1) / 2
+        a = a * (maxs - mins) + mins
+        actions.append(np.hstack([t, a]))
 
-        model = ppo(MlpPolicy, env, runner=MeveaRunner, verbose=1)
-        model.pretrain(trajectory_data, n_epochs=100)
-        model.save('{0}/model_checkpoints/rl_model_0_steps.zip'.format(args.output))
+    #  save actions
 
-    finally:
+    output = 'tmp/actions.csv'
+    pandas.DataFrame(np.vstack(actions)).to_csv(output, index=False, header=False)
 
-        # continue training
-
-        checkpoint_callback = CheckpointCallback(save_freq=2048, save_path='{0}/model_checkpoints/'.format(args.output))
-        model.learn(total_timesteps=nsteps, callback=[checkpoint_callback])

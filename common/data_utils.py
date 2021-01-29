@@ -1,28 +1,25 @@
-import pandas
+import pandas, os
 import numpy as np
+import os.path as osp
 
-def load_signals(fpath):
-    xmin = []
-    xmax = []
-    p = pandas.read_csv(fpath, header=None)
+def load_signals(dpath, key, postfix='.csv'):
+    p = pandas.read_csv(osp.join(dpath, '{0}{1}'.format(key, postfix)), header=None)
     v = p.values
-    signals = v[:, 0].tolist()
-    if v.shape[1] > 1:
-        xmin = v[:, 1].tolist()
-        xmax = v[:, 2].tolist()
-    return signals, xmin, xmax
+    result = []
+    for i in range(v.shape[1]):
+        result.append(v[:, i].tolist())
+    return result
 
-def update_signals(fpath, signals, mins, maxs):
+def update_signals(dpath, key, signals, mins, maxs, postfix='.csv'):
     signals = np.array(signals)
     arr = np.hstack([signals.reshape(-1, 1), mins.reshape(-1, 1), maxs.reshape(-1, 1)])
-    pandas.DataFrame(arr).to_csv(fpath, index=False, header=None)
+    pandas.DataFrame(arr).to_csv(osp.join(dpath, '{0}{1}'.format(key, postfix)), index=False, header=None)
 
-def save_trajectory(signal_caps, timestamps, rewards, states, stay_t_start, output, with_header=True):
+def save_trajectory(signal_caps, timestamps, rewards, states, output, with_header=True):
     timestamps = np.array(timestamps)
     rewards = np.array(rewards)
     states = np.array(states)
-    idx = np.where(timestamps < stay_t_start)[0]
-    trajectory = np.hstack([timestamps[idx, None] - timestamps[idx[0]], rewards[idx, :], states[idx, :-3]])
+    trajectory = np.hstack([timestamps[:, None] - timestamps[0], rewards[:, :], states[:, :-3]])
     if with_header:
         header = np.hstack(['Timestamp', signal_caps['reward'], signal_caps['input'], signal_caps['output']])
         trajectory = np.vstack([header, trajectory])
@@ -35,6 +32,42 @@ def load_trajectory(fpath, signals):
     outputs = p[signals['output']].values
     rewards = p[signals['reward']].values
     return t, inputs, outputs, rewards
+
+def isfloat(value):
+    try:
+        float(value)
+        result = True
+    except:
+        result = False
+    return result
+
+def isempty(value):
+    if value is None or value == 'None':
+        result = True
+    else:
+        result = False
+    return  result
+
+def parse_conditional_signals(signals, input_signals):
+    assert len(signals) == 3
+    names, values, conditions = signals
+    conditional_signals = []
+    for name, value, condition in zip(names, values, conditions):
+        if isfloat(value) and isempty(condition):
+            conditional_signals.append({'type': 'unconditional', 'name': name, 'value': float(value)})
+        elif isfloat(value) and not isempty(condition):
+            conditional_signals.append({'type': 'conditional', 'name': name, 'value': float(value), 'condition': condition})
+        elif not isfloat(value) and value in input_signals:
+            conditional_signals.append({'type': 'identical', 'name': name, 'value': value})
+    return conditional_signals
+
+def is_moving(conditional_signals, conditional_values, t):
+    values_to_check = []
+    if len(conditional_values) > 0 and t is not None:
+        for signal, value in zip(conditional_signals, conditional_values):
+            if signal['type'] == 'unconditional':
+                values_to_check.append(value)
+    return np.any(np.array(values_to_check) > 0)
 
 def adjust_indexes(signals, identical_input_signals):
     signals_to_remove = []
@@ -63,27 +96,23 @@ def adjust_indexes(signals, identical_input_signals):
     act_index = np.array(act_index)
     return obs_input_index, act_index
 
-def prepare_trajectories(signal_csv, identical_input_signals, trajectory_files, dt, use_signals=False, interp=False):
+def prepare_trajectories(signal_dir, trajectory_files, dt, use_signals=False):
 
     # load signals and their limits
 
     signals, mins, maxs = {}, {}, {}
-    for key in signal_csv.keys():
-        values, xmin, xmax = load_signals(signal_csv[key])
+    for key in ['input', 'output', 'reward']:
+        values, xmin, xmax = load_signals(signal_dir, key)
         signals[key] = values
         mins[key] = xmin
         maxs[key] = xmax
 
-    # deal with identical signals
-
-    obs_input_idx, act_idx = adjust_indexes(signals, identical_input_signals)
-
     # set standardization vectors
 
     rew_min, rew_max = np.array(mins['reward']), np.array(maxs['reward'])
-    act_min, act_max = np.array(mins['input'])[obs_input_idx], np.array(maxs['input'])[obs_input_idx]
-    obs_input_output_min = np.hstack([np.array(mins['input'])[obs_input_idx], mins['output']])
-    obs_input_output_max = np.hstack([np.array(maxs['input'])[obs_input_idx], maxs['output']])
+    act_min, act_max = np.array(mins['input']), np.array(maxs['input'])
+    obs_input_output_min = np.hstack([np.array(mins['input']), mins['output']])
+    obs_input_output_max = np.hstack([np.array(maxs['input']), maxs['output']])
     eps = 1e-10
 
     # collect trajectories
@@ -111,13 +140,13 @@ def prepare_trajectories(signal_csv, identical_input_signals, trajectory_files, 
         outputs = outputs[1:, :]
         traj = np.hstack([rewards_current, rewards_target, rewards_previous, rewards_next])
         if use_signals:
-            io = np.hstack([inputs[:, obs_input_idx], outputs[:, :]])
+            io = np.hstack([inputs, outputs])
             io = (io - obs_input_output_min[None, :]) / (obs_input_output_max[None, :] - obs_input_output_min[None, :] + 1e-10)
             traj = np.append(traj, io, axis=1)
 
         # add actions
 
-        i = inputs[:, obs_input_idx]  # -inf..inf
+        i = inputs  # -inf..inf
         i = (i - act_min[None, :]) / (act_max[None, :] - act_min[None, :] + 1e-10)  # 0..1
         i = 2 * i -1 # -1..1
         traj = np.append(traj, i, axis=1)

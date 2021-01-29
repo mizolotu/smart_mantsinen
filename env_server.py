@@ -61,7 +61,7 @@ def get_post_or_delete_signals():
             idx = backend_ids.index(id)
             signals = {}
             if request.method == 'GET' and 'signals' in backends[idx].keys():
-                for key in ['input', 'output', 'reward']:
+                for key in signal_keys:
                     if key in backends[idx]['signals'].keys():
                         signals.update({key: backends[idx]['signals'][key]})
                 result = {'signals': signals}
@@ -70,7 +70,7 @@ def get_post_or_delete_signals():
                     t_config = time()
                     backends[idx].update({'t_config': t_config})
                     signals = {}
-                    for key in ['input', 'output', 'reward']:
+                    for key in signal_keys:
                         if key in jdata['signals'].keys():
                             signals[key] = jdata['signals'][key]
                     backends[idx]['signals'] = signals
@@ -97,14 +97,14 @@ def get_or_post_state_and_reward():
         if id in backend_ids:
             idx = backend_ids.index(id)
             if request.method == 'GET':
-                result = {'t_state': None, 'state': [], 'reward': []}
+                result = {'t_state': None, 'state': [], 'reward': [], 'conditional': []}
                 for key in result.keys():
                     if key in backends[idx].keys():
                         value = backends[idx][key]
                         result.update({key: value})
             elif request.method == 'POST':
                 backends[idx].update({'t_state': time()})
-                for key in ['state', 'reward']:
+                for key in ['state', 'reward', 'conditional']:
                     if key in jdata.keys():
                         value = jdata[key]
                         backends[idx].update({key: value})
@@ -129,14 +129,14 @@ def get_or_post_action():
         if id in backend_ids:
             idx = backend_ids.index(id)
             if request.method == 'GET':
-                result = {'t_action': None, 'action': []}
+                result = {'t_action': None, 'action': [], 'conditional': []}
                 for key in result.keys():
                     if key in backends[idx].keys():
                         value = backends[idx][key]
                         result.update({key: value})
             elif request.method == 'POST':
                 backends[idx].update({'t_action': time()})
-                for key in ['action']:
+                for key in ['action', 'conditional']:
                     if key in jdata.keys():
                         value = jdata[key]
                         backends[idx].update({key: value})
@@ -161,6 +161,7 @@ def _remove_idle_backends(timeout=30):
         sleep(timeout)
 
 if __name__ == '__main__':
+    signal_keys = ['input', 'output', 'reward', 'conditional']
     backends = []
     rib_th = Thread(target=_remove_idle_backends, daemon=True)
     rib_th.start()

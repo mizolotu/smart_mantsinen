@@ -9,7 +9,6 @@ from common.runners import Runner
 from common.callbacks import CheckpointCallback
 from baselines.ppo2.ppo2 import PPO2 as ppo
 from common.model_utils import find_checkpoint_with_max_step
-from common.base_class import ActorCriticRLModel
 
 def make_env(env_class):
     fn = lambda: env_class()

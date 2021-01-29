@@ -33,22 +33,24 @@ def post_signals(url, id, signals):
 def get_state(url, id):
     state = []
     reward = []
+    conditional = []
     t_state = None
     try:
         r = requests.get('{0}/state'.format(url), json={'id': id})
         data = r.json()
-        if 'state' in data.keys() and 'reward' in data.keys() and 't_state' in data.keys():
+        if 'state' in data.keys() and 'reward' in data.keys() and 't_state' in data.keys() and 'conditional' in data.keys():
             state = data['state']
             reward = data['reward']
+            conditional = data['conditional']
             t_state = data['t_state']
     except Exception as e:
         print(e)
-    return state, reward, t_state
+    return state, reward, conditional, t_state
 
-def set_action(url, id, action):
+def set_action(url, id, action, conditional):
     result = False
     try:
-        r = requests.post('{0}/action'.format(url), json={'id': id, 'action': action})
+        r = requests.post('{0}/action'.format(url), json={'id': id, 'action': action, 'conditional': conditional})
         data = r.json()
         if 't_config' in data.keys() and data['t_config'] is not None:
             result = True

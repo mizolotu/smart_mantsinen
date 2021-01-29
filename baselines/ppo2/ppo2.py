@@ -140,7 +140,10 @@ class PPO2(ActorCriticRLModel):
             with tf.compat.v1.variable_scope('pretrain'):
                 if continuous_actions:
                     obs_ph, actions_ph, deterministic_actions_ph = self._get_pretrain_placeholders()
-                    loss = tf.reduce_mean(input_tensor=tf.square(actions_ph - deterministic_actions_ph))
+                    policy_loss = tf.reduce_mean(input_tensor=tf.square(actions_ph - deterministic_actions_ph))
+                    weight_params = [v for v in self.params if '/b' not in v.name]
+                    l2_loss = tf.reduce_sum([tf.nn.l2_loss(v) for v in weight_params])
+                    loss = tf.reduce_mean(policy_loss + 0.01 * l2_loss)
                 else:
                     obs_ph, actions_ph, actions_logits_ph = self._get_pretrain_placeholders()
                     # actions_ph has a shape if (n_batch,), we reshape it to (n_batch, 1)
@@ -158,7 +161,7 @@ class PPO2(ActorCriticRLModel):
             self.sess.run(tf.compat.v1.global_variables_initializer())
 
         if self.verbose > 0:
-            print("Pretraining with Behavior Cloning...")
+            print("Pretraining with behavior cloning...")
 
         obs_dim = self.observation_space.shape[0]
         act_dim = self.action_space.shape[0]
@@ -172,7 +175,7 @@ class PPO2(ActorCriticRLModel):
                 expert_obs, expert_actions = trajectory[idx, :obs_dim], trajectory[idx, obs_dim:obs_dim+act_dim] # dataset.get_next_batch('train')
                 feed_dict = {
                     obs_ph: expert_obs,
-                    actions_ph: expert_actions,
+                    actions_ph: expert_actions
                 }
                 train_loss_, _ = self.sess.run([loss, optim_op], feed_dict)
                 train_loss += train_loss_
@@ -182,7 +185,7 @@ class PPO2(ActorCriticRLModel):
             del expert_obs, expert_actions
 
         if self.verbose > 0:
-            print("Pretraining done.")
+            print("Pretraining done!")
 
         return self
 
