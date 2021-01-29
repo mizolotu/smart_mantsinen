@@ -12,8 +12,8 @@ from common.model_utils import find_checkpoint_with_max_step
 from common.data_utils import prepare_trajectories
 from common.callbacks import CheckpointCallback
 
-def make_env(env_class, mevea_model, signal_dir, trajectory_data, server_url, frequency, use_signals):
-    fn = lambda: env_class(mevea_model, signal_dir, trajectory_data, server_url, frequency, use_signals)
+def make_env(env_class, mevea_model, signal_dir, trajectory_data, server_url, delay, use_signals):
+    fn = lambda: env_class(mevea_model, signal_dir, trajectory_data, server_url, delay, use_signals)
     return fn
 
 if __name__ == '__main__':
@@ -33,7 +33,7 @@ if __name__ == '__main__':
     parser.add_argument('-m', '--model', help='File path to the Mevea model.', default='C:\\Users\\mevea\\MeveaModels\\Mantsinen\\Models\\Mantsinen300M\\300M_fixed.mvs')
     parser.add_argument('-s', '--server', help='Server URL.', default='http://127.0.0.1:5000')
     parser.add_argument('-t', '--trajectories', help='Trajectory files.', default='trajectory1.csv,trajectory2.csv,trajectory3.csv,trajectory4.csv')
-    parser.add_argument('-f', '--frequency', help='Action frequency.', default=0.1, type=float)
+    parser.add_argument('-d', '--delay', help='Action delay.', default=0.1, type=float)
     parser.add_argument('-o', '--output', help='Result output.', default='models/mevea/mantsinen/ppo')
     args = parser.parse_args()
 
@@ -46,11 +46,11 @@ if __name__ == '__main__':
     # prepare training data
 
     trajectory_files = [osp.join(trajectory_dir, fpath) for fpath in args.trajectories.split(',')]
-    trajectory_data = prepare_trajectories(signal_dir, trajectory_files, args.frequency, use_signals=use_signals)
+    trajectory_data = prepare_trajectories(signal_dir, trajectory_files, args.delay, use_signals=use_signals)
 
     # create environments
 
-    env_fns = [make_env(MantsinenBasic, args.model, signal_dir, data, args.server, args.frequency, use_signals) for data in trajectory_data]
+    env_fns = [make_env(MantsinenBasic, args.model, signal_dir, data, args.server, args.delay, use_signals) for data in trajectory_data]
     env = MeveaVecEnv(env_fns)
 
     try:
@@ -70,7 +70,7 @@ if __name__ == '__main__':
 
         # create and pretrain model
 
-        model = ppo(MlpPolicy, env, runner=MeveaRunner, verbose=1)
+        model = ppo(env, runner=MeveaRunner, verbose=1)
         model.pretrain(trajectory_data, n_epochs=100)
         model.save('{0}/model_checkpoints/rl_model_0_steps.zip'.format(args.output))
 

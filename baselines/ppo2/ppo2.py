@@ -177,10 +177,17 @@ class PPO2(ActorCriticRLModel):
                     obs_ph: expert_obs,
                     actions_ph: expert_actions
                 }
+                with self.graph.as_default():
+                    with tf.compat.v1.variable_scope('model'):
+                        weight_params = [v for v in self.params if '/b' not in v.name]
+                        for param in weight_params:
+                            print(param.name)
+                            print(tf.compat.v1.get_variable(param.name))
                 train_loss_, _ = self.sess.run([loss, optim_op], feed_dict)
                 train_loss += train_loss_
 
             train_loss /= len(trajectories)
+            print('Epoch {0}: loss = {1}'.format(epoch_idx, train_loss))
 
             del expert_obs, expert_actions
 

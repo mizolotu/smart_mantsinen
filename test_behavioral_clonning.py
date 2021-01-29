@@ -6,7 +6,7 @@ from env_frontend import MantsinenBasic
 from common.server_utils import is_server_running
 from time import sleep
 from baselines.ppo2.ppo2 import PPO2 as ppo
-from common.policies import MlpPolicy
+from common.policies import MlpPolicy, CnnPolicy
 from common.mevea_vec_env import MeveaVecEnv
 from common.runners import MeveaRunner
 from common.data_utils import prepare_trajectories, load_signals
@@ -58,7 +58,7 @@ if __name__ == '__main__':
 
     # pretrain model
 
-    model.pretrain(trajectory_data, n_epochs=100)
+    model.pretrain(trajectory_data, n_epochs=1000)
 
     # check actions after pretraining for validation purposes
 

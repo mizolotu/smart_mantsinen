@@ -9,14 +9,14 @@ class MantsinenBasic(gym.Env):
 
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, mvs, signal_dir, trajectory_data, server_url, maxtime, use_signals=False):
+    def __init__(self, mvs, signal_dir, trajectory_data, server_url, dt, use_signals=False):
 
         # init params
 
         self.mvs = mvs
         self.id = None
         self.server = server_url
-        self.maxtime = maxtime
+        self.dt = dt
         self.use_signals = use_signals
 
         # load signals and their limits
@@ -75,14 +75,14 @@ class MantsinenBasic(gym.Env):
         post_signals(self.server, self.id, self.signals)
         input_output_obs, reward_components = [], []
         while len(input_output_obs) == 0 or len(reward_components) == 0:
-            sleep(self.maxtime)
+            sleep(self.dt)
             input_output_obs, reward_components = self._get_state()
         t_now = time()
         real_xyz = self._std_vector(reward_components, self.rew_min, self.rew_max)
         self.start_time = t_now
         t_elapsed_from_the_start = t_now - self.start_time
         target_xyz = self._predict_xyz(t_elapsed_from_the_start)
-        next_target_xyz = self._predict_xyz(t_elapsed_from_the_start + self.maxtime)
+        next_target_xyz = self._predict_xyz(t_elapsed_from_the_start + self.dt)
         obs = np.hstack([real_xyz, target_xyz, real_xyz, next_target_xyz])
         if self.use_signals:
             obs = np.append(obs, self._std_vector(np.array(input_output_obs)[self.obs_index], self.obs_input_output_min, self.obs_input_output_max))
@@ -101,7 +101,7 @@ class MantsinenBasic(gym.Env):
         t_elapsed_from_last_step = t_now - self.last_time
         real_xyz = self._std_vector(reward_components, self.rew_min, self.rew_max)
         target_xyz = self._predict_xyz(t_elapsed_from_start)
-        next_target_xyz = self._predict_xyz(t_elapsed_from_start + self.maxtime)
+        next_target_xyz = self._predict_xyz(t_elapsed_from_start + self.dt)
         obs = np.hstack([real_xyz, target_xyz, self.last_reward_components, next_target_xyz])
         if self.use_signals:
             obs = np.append(obs, self._std_vector(np.array(input_output_obs)[self.obs_index], self.obs_input_output_min, self.obs_input_output_max))
