@@ -1,15 +1,15 @@
 Logging to /home/mizolotu/PycharmProjects/SmartMantsinen/models/gym/pendulum/ppo
 --------------------------------------
-| approxkl           | 0.0015254208  |
-| clipfrac           | 0.009490967   |
-| ep_reward_mean     | -4.87         |
-| explained_variance | -0.00447      |
-| fps                | 4205          |
+| approxkl           | 0.00071282045 |
+| clipfrac           | 0.0022888184  |
+| ep_reward_mean     | -5.56         |
+| explained_variance | 0.000359      |
+| fps                | 2265          |
 | n_updates          | 1             |
-| policy_entropy     | 1.3812617     |
-| policy_loss        | -0.0006822233 |
+| policy_entropy     | 1.3790939     |
+| policy_loss        | -0.0003327757 |
 | serial_timesteps   | 2048          |
-| time_elapsed       | 2e-05         |
+| time_elapsed       | 2.12e-05      |
 | total_timesteps    | 8192          |
-| value_loss         | 3637.4724     |
+| value_loss         | 4874.2812     |
 --------------------------------------

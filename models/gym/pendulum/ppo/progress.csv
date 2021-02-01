@@ -1,2 +1,2 @@
-value_loss,explained_variance,total_timesteps,policy_loss,policy_entropy,fps,time_elapsed,approxkl,ep_reward_mean,serial_timesteps,clipfrac,n_updates
-3637.4724,-0.0044689178466796875,8192,-0.0006822233,1.3812617,4205,2.002716064453125e-05,0.0015254208,-4.873293979646434,2048,0.009490967,1
+clipfrac,n_updates,time_elapsed,approxkl,explained_variance,policy_entropy,total_timesteps,value_loss,policy_loss,ep_reward_mean,serial_timesteps,fps
+0.0022888184,1,2.1219253540039062e-05,0.00071282045,0.00035887956619262695,1.3790939,8192,4874.2812,-0.0003327757,-5.563016261850951,2048,2265

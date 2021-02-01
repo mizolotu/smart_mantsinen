@@ -1,4 +1,5 @@
 import numpy as np
+import gym
 
 from common.runners import AbstractEnvRunner, swap_and_flatten
 from common.solver_utils import get_solver_path, start_solver, stop_solver

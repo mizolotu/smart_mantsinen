@@ -51,7 +51,7 @@ class PPO2(ActorCriticRLModel):
     :param n_cpu_tf_sess: (int) The number of threads for TensorFlow operations
         If None, the number of cpu of the current machine will be used.
     """
-    def __init__(self, policy, env, runner, gamma=0.99, n_steps=2048, ent_coef=0.001, learning_rate=2.5e-4, vf_coef=0.5,
+    def __init__(self, policy, env, runner, gamma=0.99, n_steps=2048, ent_coef=0.0, learning_rate=2.5e-4, vf_coef=0.5,
                  max_grad_norm=0.5, lam=0.95, nminibatches=4, noptepochs=8, cliprange=0.2, cliprange_vf=None,
                  verbose=1, tensorboard_log=None, _init_setup_model=True, policy_kwargs=None,
                  full_tensorboard_log=False, seed=None, n_cpu_tf_sess=None):
@@ -110,7 +110,7 @@ class PPO2(ActorCriticRLModel):
             return policy.obs_ph, self.action_ph, policy.policy
         return policy.obs_ph, self.action_ph, policy.action
 
-    def pretrain(self, trajectories, n_epochs=10, learning_rate=1e-4, adam_epsilon=1e-8, val_interval=None):
+    def pretrain(self, trajectories, n_epochs=10, learning_rate=1e-4, adam_epsilon=1e-8, val_interval=None, l2_loss_weight=0.0):
         """
         Pretrain a model using behavior cloning:
         supervised learning given an expert dataset.
@@ -143,9 +143,9 @@ class PPO2(ActorCriticRLModel):
                 if continuous_actions:
                     obs_ph, actions_ph, deterministic_actions_ph = self._get_pretrain_placeholders()
                     policy_loss = tf.reduce_mean(input_tensor=tf.square(actions_ph - deterministic_actions_ph))
-                    #weight_params = [v for v in self.params if '/b' not in v.name]
-                    #l2_loss = tf.reduce_sum([tf.nn.l2_loss(v) for v in weight_params])
-                    loss = policy_loss
+                    weight_params = [v for v in self.params if '/b' not in v.name]
+                    l2_loss = tf.reduce_mean([tf.nn.l2_loss(v) for v in weight_params])
+                    loss = policy_loss + l2_loss_weight * l2_loss
                 else:
                     obs_ph, actions_ph, actions_logits_ph = self._get_pretrain_placeholders()
                     # actions_ph has a shape if (n_batch,), we reshape it to (n_batch, 1)

@@ -71,7 +71,7 @@ if __name__ == '__main__':
         # create and pretrain model
 
         model = ppo(MlpPolicy, env, runner=MeveaRunner, verbose=1)
-        model.pretrain(trajectory_data, n_epochs=10000)
+        model.pretrain(trajectory_data, n_epochs=100000)
         model.save('{0}/model_checkpoints/rl_model_0_steps.zip'.format(args.output))
 
     finally:

@@ -3,8 +3,6 @@ import os.path as osp
 import numpy as np
 
 from env_frontend import MantsinenBasic
-from common.server_utils import is_server_running
-from time import sleep
 from baselines.ppo2.ppo2 import PPO2 as ppo
 from common.policies import MlpPolicy, CnnPolicy
 from common.mevea_vec_env import MeveaVecEnv
@@ -36,13 +34,6 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--output', help='Result output.', default='models/mevea/mantsinen/ppo')
     args = parser.parse_args()
 
-    # check that server is running
-
-    while not is_server_running(args.server):
-        print('Start the server: python3 env_server.py')
-        sleep(sleep_interval)
-        break
-
     # prepare training data
 
     trajectory_files = [osp.join(trajectory_dir, fpath) for fpath in args.trajectories.split(',')]
@@ -60,6 +51,7 @@ if __name__ == '__main__':
     # pretrain model
 
     model.pretrain(trajectory_data, n_epochs=100000)
+    model.save('{0}/model_checkpoints/rl_model_0_steps.zip'.format(args.output))
 
     # check actions after pretraining for validation purposes
 
@@ -83,4 +75,3 @@ if __name__ == '__main__':
 
     output = 'tmp/actions.csv'
     pandas.DataFrame(np.vstack(actions)).to_csv(output, index=False, header=False)
-

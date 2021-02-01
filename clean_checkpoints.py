@@ -17,5 +17,5 @@ if __name__ == '__main__':
 
     # delete other checkpoints
 
-    #clean_checkpoint_directory(args.checkpoints, exclude=[last_date_checkpoint, max_step_checkpoint])
-    clean_checkpoint_directory(args.checkpoints, exclude=[])
+    clean_checkpoint_directory(args.checkpoints, exclude=[last_date_checkpoint, max_step_checkpoint])
+    #clean_checkpoint_directory(args.checkpoints, exclude=[])
