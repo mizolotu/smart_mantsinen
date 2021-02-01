@@ -56,6 +56,8 @@ class PPO2(ActorCriticRLModel):
                  verbose=1, tensorboard_log=None, _init_setup_model=True, policy_kwargs=None,
                  full_tensorboard_log=False, seed=None, n_cpu_tf_sess=None):
 
+        self.debug = False
+
         self.learning_rate = learning_rate
         self.cliprange = cliprange
         self.cliprange_vf = cliprange_vf
@@ -106,7 +108,7 @@ class PPO2(ActorCriticRLModel):
         policy = self.act_model
         if isinstance(self.action_space, gym.spaces.Discrete):
             return policy.obs_ph, self.action_ph, policy.policy
-        return policy.obs_ph, self.action_ph, policy.deterministic_action
+        return policy.obs_ph, self.action_ph, policy.action
 
     def pretrain(self, trajectories, n_epochs=10, learning_rate=1e-4, adam_epsilon=1e-8, val_interval=None):
         """
@@ -141,9 +143,9 @@ class PPO2(ActorCriticRLModel):
                 if continuous_actions:
                     obs_ph, actions_ph, deterministic_actions_ph = self._get_pretrain_placeholders()
                     policy_loss = tf.reduce_mean(input_tensor=tf.square(actions_ph - deterministic_actions_ph))
-                    weight_params = [v for v in self.params if '/b' not in v.name]
-                    l2_loss = tf.reduce_sum([tf.nn.l2_loss(v) for v in weight_params])
-                    loss = tf.reduce_mean(policy_loss + 0.01 * l2_loss)
+                    #weight_params = [v for v in self.params if '/b' not in v.name]
+                    #l2_loss = tf.reduce_sum([tf.nn.l2_loss(v) for v in weight_params])
+                    loss = policy_loss
                 else:
                     obs_ph, actions_ph, actions_logits_ph = self._get_pretrain_placeholders()
                     # actions_ph has a shape if (n_batch,), we reshape it to (n_batch, 1)
@@ -167,6 +169,15 @@ class PPO2(ActorCriticRLModel):
         act_dim = self.action_space.shape[0]
 
         for epoch_idx in range(int(n_epochs)):
+
+            if self.debug:
+                old_vals = []
+                with self.graph.as_default():
+                    vars = tf.compat.v1.trainable_variables()
+                    vars_vals = self.sess.run(vars)
+                    for var, val in zip(vars, vars_vals):
+                        old_vals.append(val)
+
             train_loss = 0.0
             # Full pass on the training set
             for trajectory in trajectories:
@@ -177,17 +188,19 @@ class PPO2(ActorCriticRLModel):
                     obs_ph: expert_obs,
                     actions_ph: expert_actions
                 }
-                with self.graph.as_default():
-                    with tf.compat.v1.variable_scope('model'):
-                        weight_params = [v for v in self.params if '/b' not in v.name]
-                        for param in weight_params:
-                            print(param.name)
-                            print(tf.compat.v1.get_variable(param.name))
+
                 train_loss_, _ = self.sess.run([loss, optim_op], feed_dict)
                 train_loss += train_loss_
 
             train_loss /= len(trajectories)
             print('Epoch {0}: loss = {1}'.format(epoch_idx, train_loss))
+
+            if self.debug:
+                with self.graph.as_default():
+                    vars = tf.compat.v1.trainable_variables()
+                    vars_vals = self.sess.run(vars)
+                    for var, old_val, val in zip(vars, old_vals, vars_vals):
+                        print('Var: {0}, difference: {1}'.format(var, np.linalg.norm(val - old_val)))
 
             del expert_obs, expert_actions
 
@@ -227,6 +240,9 @@ class PPO2(ActorCriticRLModel):
 
                 with tf.compat.v1.variable_scope("loss", reuse=False):
                     self.action_ph = train_model.pdtype.sample_placeholder([None], name="action_ph")
+
+                    self.another_action_ph = train_model.pdtype.sample_placeholder([None], name="another_action_ph")
+
                     self.advs_ph = tf.compat.v1.placeholder(tf.float32, [None], name="advs_ph")
                     self.rewards_ph = tf.compat.v1.placeholder(tf.float32, [None], name="rewards_ph")
                     self.old_neglog_pac_ph = tf.compat.v1.placeholder(tf.float32, [None], name="old_neglog_pac_ph")
@@ -331,6 +347,11 @@ class PPO2(ActorCriticRLModel):
                 self.value = act_model.value
                 self.initial_state = act_model.initial_state
                 tf.compat.v1.global_variables_initializer().run(session=self.sess)  # pylint: disable=E1101
+
+                #vars = tf.compat.v1.trainable_variables()
+                #vars_vals = self.sess.run(vars)
+                #for var, val in zip(vars, vars_vals):
+                #    print("var: {}, value: {}".format(var.name, val))
 
                 self.summary = tf.compat.v1.summary.merge_all()
 

@@ -1,6 +1,5 @@
 import argparse, os
 import os.path as osp
-import numpy as np
 
 from common.data_utils import load_signals, save_trajectory, parse_conditional_signals, is_moving
 from common.solver_utils import get_solver_path, start_solver, stop_solver

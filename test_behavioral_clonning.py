@@ -8,7 +8,7 @@ from time import sleep
 from baselines.ppo2.ppo2 import PPO2 as ppo
 from common.policies import MlpPolicy, CnnPolicy
 from common.mevea_vec_env import MeveaVecEnv
-from common.runners import MeveaRunner
+from common.runners import Runner
 from common.data_utils import prepare_trajectories, load_signals
 
 def make_env(env_class, mevea_model, signal_dir, trajectory_data, server_url, frequency, use_signals):
@@ -41,6 +41,7 @@ if __name__ == '__main__':
     while not is_server_running(args.server):
         print('Start the server: python3 env_server.py')
         sleep(sleep_interval)
+        break
 
     # prepare training data
 
@@ -54,11 +55,11 @@ if __name__ == '__main__':
 
     # create model
 
-    model = ppo(MlpPolicy, env, runner=MeveaRunner, verbose=1)
+    model = ppo(MlpPolicy, env, runner=Runner, verbose=1)
 
     # pretrain model
 
-    model.pretrain(trajectory_data, n_epochs=1000)
+    model.pretrain(trajectory_data, n_epochs=100000)
 
     # check actions after pretraining for validation purposes
 

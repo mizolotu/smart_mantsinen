@@ -7,7 +7,7 @@ from time import sleep
 from baselines.ppo2.ppo2 import PPO2 as ppo
 from common.policies import MlpPolicy
 from common.mevea_vec_env import MeveaVecEnv
-from common.runners import MeveaRunner
+from common.mevea_runner import MeveaRunner
 from common.model_utils import find_checkpoint_with_max_step
 from common.data_utils import prepare_trajectories
 from common.callbacks import CheckpointCallback
@@ -70,8 +70,8 @@ if __name__ == '__main__':
 
         # create and pretrain model
 
-        model = ppo(env, runner=MeveaRunner, verbose=1)
-        model.pretrain(trajectory_data, n_epochs=100)
+        model = ppo(MlpPolicy, env, runner=MeveaRunner, verbose=1)
+        model.pretrain(trajectory_data, n_epochs=10000)
         model.save('{0}/model_checkpoints/rl_model_0_steps.zip'.format(args.output))
 
     finally:
