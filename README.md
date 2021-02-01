@@ -59,7 +59,7 @@ python train_baseline.py -m <path_to_mantsinen_model>
 1. Model checkpoints are created via default callback which runs every few steps, unnecessary checkpoints can be removed as follows (only the checkpoint with the latest date and the checkpoint with tha maximum training steps will remain):
 
 ```bash
-python train_baseline.py -c <path_to_checkpoint_directory> 
+python clean_checkpoints.py -c <path_to_checkpoint_directory> 
 ```
 
 
