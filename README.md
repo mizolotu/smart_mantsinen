@@ -43,7 +43,7 @@ python standardize_data.py
 
 ## Training
 
-1. From "SmartMantsinen" directory start the server script, if it has not yet started: 
+1. From "SmartMantsinen" directory start the server script, if it has not yet been started: 
 ```bash
 python env_server.py
 ```
