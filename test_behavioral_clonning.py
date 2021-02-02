@@ -4,7 +4,7 @@ import numpy as np
 
 from env_frontend import MantsinenBasic
 from baselines.ppo2.ppo2 import PPO2 as ppo
-from common.policies import MlpPolicy, CnnPolicy
+from common.policies import MlpPolicy
 from common.mevea_vec_env import MeveaVecEnv
 from common.runners import Runner
 from common.data_utils import prepare_trajectories, load_signals
