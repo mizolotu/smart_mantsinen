@@ -1,4 +1,4 @@
-import gym, requests
+import gym
 import numpy as np
 
 from time import sleep, time
@@ -71,6 +71,11 @@ class MantsinenBasic(gym.Env):
         self.observation_space = gym.spaces.Box(low=obs_min, high=obs_max, shape=(obs_dim,), dtype=np.float)
         self.action_space = gym.spaces.Box(low=-1, high=1, shape=(act_dim,), dtype=np.float)
 
+        # time
+
+        self.start_time = None
+        self.last_time = None
+
     def reset(self):
         post_signals(self.server, self.id, self.signals)
         input_output_obs, reward_components = [], []
@@ -79,8 +84,8 @@ class MantsinenBasic(gym.Env):
             input_output_obs, reward_components = self._get_state()
         t_now = time()
         real_xyz = self._std_vector(reward_components, self.rew_min, self.rew_max)
-        self.start_time = t_now
-        t_elapsed_from_the_start = t_now - self.start_time
+        #self.start_time = t_now
+        t_elapsed_from_the_start = 0 # t_now - self.start_time
         target_xyz = self._predict_xyz(t_elapsed_from_the_start)
         next_target_xyz = self._predict_xyz(t_elapsed_from_the_start + self.dt)
         obs = np.hstack([real_xyz, target_xyz, real_xyz, next_target_xyz])
@@ -88,10 +93,13 @@ class MantsinenBasic(gym.Env):
             obs = np.append(obs, self._std_vector(np.array(input_output_obs)[self.obs_index], self.obs_input_output_min, self.obs_input_output_max))
         self.last_reward_components = np.array(reward_components)
         self.last_target_components = np.array(target_xyz)
-        self.last_time = t_now
+        #self.last_time = t_now
         return obs
 
     def step(self, action):
+        if self.start_time is None and self.last_time is None:
+            self.start_time = time()
+            self.last_time = time()
         action = self._std_vector(action, self.action_space.low, self.action_space.high)
         action = self._orig_vector(action, self.act_min, self.act_max)
         self._set_action(action)
@@ -114,6 +122,10 @@ class MantsinenBasic(gym.Env):
 
     def render(self, mode='human', close=False):
         pass
+
+    def _all_ready(self):
+        pass
+
 
     def _get_state(self):
         obs, reward_components, _, t_state = get_state(self.server, self.id)
@@ -152,12 +164,10 @@ class MantsinenBasic(gym.Env):
         ])
         return xyz_interp
 
-    def _calculate_reward(self, real_xyz, target_xyz, t_elapsed_from_last_step, reward_x_coef=0.5, reward_dxdt_coef=0.0):
+    def _calculate_reward(self, real_xyz, target_xyz, t_elapsed_from_last_step, reward_x_coef=0.5, reward_dxdt_coef=0.5):
         dxyzdt = (real_xyz - self.last_reward_components) / t_elapsed_from_last_step
         target_dxyzdt = (target_xyz - self.last_target_components) / t_elapsed_from_last_step
         reward_x = np.linalg.norm(real_xyz - target_xyz) / self.dx_max
         reward_dxdt = np.linalg.norm(dxyzdt - target_dxyzdt) / self.dxdt_max
         score = - reward_x_coef * reward_x - reward_dxdt_coef * reward_dxdt
         return score
-
-

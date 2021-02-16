@@ -6,7 +6,7 @@ from env_frontend import MantsinenBasic
 from baselines.ppo2.ppo2 import PPO2 as ppo
 from common.policies import MlpPolicy
 from common.mevea_vec_env import MeveaVecEnv
-from common.runners import Runner
+from common.mevea_runner import MeveaRunner
 from common.data_utils import prepare_trajectories, load_signals
 
 def make_env(env_class, mevea_model, signal_dir, trajectory_data, server_url, frequency, use_signals):
@@ -46,11 +46,11 @@ if __name__ == '__main__':
 
     # create model
 
-    model = ppo(MlpPolicy, env, runner=Runner, verbose=1)
+    model = ppo(MlpPolicy, env, runner=MeveaRunner, verbose=1)
 
     # pretrain model
 
-    model.pretrain(trajectory_data, n_epochs=100000)
+    model.pretrain(trajectory_data, n_epochs=20000)
     model.save('{0}/model_checkpoints/rl_model_0_steps.zip'.format(args.output))
 
     # check actions after pretraining for validation purposes

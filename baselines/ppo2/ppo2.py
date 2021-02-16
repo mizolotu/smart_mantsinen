@@ -52,7 +52,7 @@ class PPO2(ActorCriticRLModel):
         If None, the number of cpu of the current machine will be used.
     """
     def __init__(self, policy, env, runner, gamma=0.99, n_steps=2048, ent_coef=0.0, learning_rate=2.5e-4, vf_coef=0.5,
-                 max_grad_norm=0.5, lam=0.95, nminibatches=4, noptepochs=8, cliprange=0.2, cliprange_vf=None,
+                 max_grad_norm=0.5, lam=0.95, nminibatches=2, noptepochs=8, cliprange=0.001, cliprange_vf=None,
                  verbose=1, tensorboard_log=None, _init_setup_model=True, policy_kwargs=None,
                  full_tensorboard_log=False, seed=None, n_cpu_tf_sess=None):
 
@@ -108,9 +108,9 @@ class PPO2(ActorCriticRLModel):
         policy = self.act_model
         if isinstance(self.action_space, gym.spaces.Discrete):
             return policy.obs_ph, self.action_ph, policy.policy
-        return policy.obs_ph, self.action_ph, policy.action
+        return policy.obs_ph, self.action_ph, policy.deterministic_action # policy.action will train logstd, but is it ok? not sure...
 
-    def pretrain(self, trajectories, n_epochs=10, learning_rate=1e-4, adam_epsilon=1e-8, val_interval=None, l2_loss_weight=0.0):
+    def pretrain(self, trajectories, n_epochs=10, learning_rate=1e-4, adam_epsilon=1e-8, val_interval=None, l2_loss_weight=0.001):
         """
         Pretrain a model using behavior cloning:
         supervised learning given an expert dataset.
@@ -130,26 +130,16 @@ class PPO2(ActorCriticRLModel):
 
         assert discrete_actions or continuous_actions, 'Only Discrete and Box action spaces are supported'
 
-        # Validate the model every 10% of the total number of iteration
-        if val_interval is None:
-            # Prevent modulo by zero
-            if n_epochs < 10:
-                val_interval = 1
-            else:
-                val_interval = int(n_epochs / 10)
-
         with self.graph.as_default():
             with tf.compat.v1.variable_scope('pretrain'):
                 if continuous_actions:
                     obs_ph, actions_ph, deterministic_actions_ph = self._get_pretrain_placeholders()
                     policy_loss = tf.reduce_mean(input_tensor=tf.square(actions_ph - deterministic_actions_ph))
                     weight_params = [v for v in self.params if '/b' not in v.name]
-                    l2_loss = tf.reduce_mean([tf.nn.l2_loss(v) for v in weight_params])
+                    l2_loss = tf.reduce_sum([tf.nn.l2_loss(v) for v in weight_params])
                     loss = policy_loss + l2_loss_weight * l2_loss
                 else:
                     obs_ph, actions_ph, actions_logits_ph = self._get_pretrain_placeholders()
-                    # actions_ph has a shape if (n_batch,), we reshape it to (n_batch, 1)
-                    # so no additional changes is needed in the dataloader
                     actions_ph = tf.expand_dims(actions_ph, axis=1)
                     one_hot_actions = tf.one_hot(actions_ph, self.action_space.n)
                     loss = tf.nn.softmax_cross_entropy_with_logits(
@@ -193,7 +183,8 @@ class PPO2(ActorCriticRLModel):
                 train_loss += train_loss_
 
             train_loss /= len(trajectories)
-            print('Epoch {0}: loss = {1}'.format(epoch_idx, train_loss))
+            if n_epochs < 100 or (epoch_idx % (n_epochs // 100)) == 0:
+                print('Epoch {0}/{1}: loss = {2}'.format(epoch_idx, n_epochs, train_loss))
 
             if self.debug:
                 with self.graph.as_default():
@@ -359,7 +350,7 @@ class PPO2(ActorCriticRLModel):
                     writer, states=None, cliprange_vf=None):
         """
         Training of PPO2 Algorithm
-
+2521
         :param learning_rate: (float) learning rate
         :param cliprange: (float) Clipping factor
         :param obs: (np.ndarray) The current observation of the environment
@@ -448,7 +439,6 @@ class PPO2(ActorCriticRLModel):
 
                 callback.on_rollout_start()
                 # true_reward is the reward without discount
-
                 rollout = self.runner.run(callback)
                 # Unpack
                 obs, returns, masks, actions, values, neglogpacs, states, ep_infos, true_reward = rollout
@@ -463,6 +453,7 @@ class PPO2(ActorCriticRLModel):
 
                 self.ep_info_buf.extend(ep_infos)
                 mb_loss_vals = []
+
                 if states is None:  # nonrecurrent version
                     update_fac = max(self.n_batch // self.nminibatches // self.noptepochs, 1)
                     inds = np.arange(self.n_batch)
