@@ -52,7 +52,7 @@ class PPO2(ActorCriticRLModel):
         If None, the number of cpu of the current machine will be used.
     """
     def __init__(self, policy, env, runner, gamma=0.99, n_steps=2048, ent_coef=0.0, learning_rate=2.5e-4, vf_coef=0.5,
-                 max_grad_norm=0.5, lam=0.95, nminibatches=2, noptepochs=8, cliprange=0.001, cliprange_vf=None,
+                 max_grad_norm=0.5, lam=0.95, nminibatches=2, noptepochs=8, cliprange=0.2, cliprange_vf=None,
                  verbose=1, tensorboard_log=None, _init_setup_model=True, policy_kwargs=None,
                  full_tensorboard_log=False, seed=None, n_cpu_tf_sess=None):
 
@@ -110,7 +110,7 @@ class PPO2(ActorCriticRLModel):
             return policy.obs_ph, self.action_ph, policy.policy
         return policy.obs_ph, self.action_ph, policy.deterministic_action # policy.action will train logstd, but is it ok? not sure...
 
-    def pretrain(self, trajectories, n_epochs=10, learning_rate=1e-4, adam_epsilon=1e-8, val_interval=None, l2_loss_weight=0.001):
+    def pretrain(self, data, n_epochs=10, learning_rate=1e-4, adam_epsilon=1e-8, val_interval=None, l2_loss_weight=0.001):
         """
         Pretrain a model using behavior cloning:
         supervised learning given an expert dataset.
@@ -158,6 +158,8 @@ class PPO2(ActorCriticRLModel):
         obs_dim = self.observation_space.shape[0]
         act_dim = self.action_space.shape[0]
 
+        ndata = data.shape[0]
+        nbatches = ndata // self.n_steps
         for epoch_idx in range(int(n_epochs)):
 
             if self.debug:
@@ -169,11 +171,12 @@ class PPO2(ActorCriticRLModel):
                         old_vals.append(val)
 
             train_loss = 0.0
+
             # Full pass on the training set
-            for trajectory in trajectories:
-                n = trajectory.shape[0]
-                idx = np.random.choice(n, self.n_steps)
-                expert_obs, expert_actions = trajectory[idx, :obs_dim], trajectory[idx, obs_dim:obs_dim+act_dim] # dataset.get_next_batch('train')
+
+            for i in range(nbatches):
+                idx = np.random.choice(ndata, self.n_steps)
+                expert_obs, expert_actions = data[idx, :obs_dim], data[idx, obs_dim:obs_dim+act_dim]
                 feed_dict = {
                     obs_ph: expert_obs,
                     actions_ph: expert_actions
@@ -182,9 +185,9 @@ class PPO2(ActorCriticRLModel):
                 train_loss_, _ = self.sess.run([loss, optim_op], feed_dict)
                 train_loss += train_loss_
 
-            train_loss /= len(trajectories)
-            if n_epochs < 100 or (epoch_idx % (n_epochs // 100)) == 0:
-                print('Epoch {0}/{1}: loss = {2}'.format(epoch_idx, n_epochs, train_loss))
+            train_loss /= nbatches
+            if n_epochs <= 100 or ((epoch_idx + 1) % (n_epochs // 100)) == 0:
+                print('Epoch {0}/{1}: loss = {2}'.format(epoch_idx + 1, n_epochs, train_loss))
 
             if self.debug:
                 with self.graph.as_default():

@@ -96,7 +96,7 @@ def adjust_indexes(signals, identical_input_signals):
     act_index = np.array(act_index)
     return obs_input_index, act_index
 
-def prepare_trajectories(signal_dir, trajectory_files, dt, use_signals=False):
+def prepare_trajectories(signal_dir, trajectory_files, use_signals=False, action_scale=1, npoints=128, lookback=4):
 
     # load signals and their limits
 
@@ -115,46 +115,67 @@ def prepare_trajectories(signal_dir, trajectory_files, dt, use_signals=False):
     obs_input_output_max = np.hstack([np.array(maxs['input']), maxs['output']])
     eps = 1e-10
 
-    # collect trajectories
+    # loop through trajectories
 
     trajectories = []
+    waypoints = []
+
     for fpath in trajectory_files:
 
         # load trajectories
 
         rew_t, inputs, outputs, rewards = load_trajectory(fpath, signals)
 
-        # add observations
+        # calculate way points
 
-        rewards_current = (rewards[1:] - rew_min[None, :]) / (rew_max[None, :] - rew_min[None, :] + eps)
-        rewards_previous = (rewards[:-1, :] - rew_min[None, :]) / (rew_max[None, :] - rew_min[None, :] + eps)
-        rewards_next = np.zeros_like(rewards_current)
-        for i in range(rewards_current.shape[0]):
-            for j in range(rewards_current.shape[1]):
-                rewards_next[i, j] = np.interp(rew_t[i] + dt, rew_t[1:], rewards_current[:, j])
-        rewards_target = np.zeros_like(rewards_current)
-        for i in range(rewards_current.shape[0]):
-            for j in range(rewards_current.shape[1]):
-                rewards_next[i, j] = np.interp(rew_t[i], rew_t[1:], rewards_current[:, j])
-        inputs = inputs[1:, :]
-        outputs = outputs[1:, :]
-        traj = np.hstack([rewards_current, rewards_target, rewards_previous, rewards_next])
-        if use_signals:
-            io = np.hstack([inputs, outputs])
-            io = (io - obs_input_output_min[None, :]) / (obs_input_output_max[None, :] - obs_input_output_min[None, :] + 1e-10)
-            traj = np.append(traj, io, axis=1)
+        n = len(rew_t)
+        assert n >= (npoints * lookback)
+        xp = np.arange(n)
+        x = np.arange(1, npoints + 1) * n / npoints
+        wpoints = np.zeros((npoints + 1, 3))
+        for i in range(3):
+            wpoints[:-1, i] = np.interp(x, xp, rewards[:, i])
+        wpoints[-1, :] = rewards[-1, :]  # add the last waypoint one more time
+        waypoints.append(wpoints)
 
-        # add actions
+        # standardize data
 
-        i = inputs  # -inf..inf
-        i = (i - act_min[None, :]) / (act_max[None, :] - act_min[None, :] + 1e-10)  # 0..1
-        i = 2 * i -1 # -1..1
-        traj = np.append(traj, i, axis=1)
+        rews = (rewards - rew_min[None, :]) / (rew_max[None, :] - rew_min[None, :] + eps)
+        ios = (np.hstack([inputs, outputs]) - obs_input_output_min[None, :]) / (obs_input_output_max[None, :] - obs_input_output_min[None, :] + eps)
+        ios_with_lookback = np.hstack([ios[k : n - lookback + k + 1, :] for k in range(lookback)])
+        inps = np.array(inputs)  # -inf..inf
+        inps = (inps - act_min[None, :]) / (act_max[None, :] - act_min[None, :] + 1e-10)  # 0..1
+        inps = action_scale * (2 * inps - 1)  # -scale..scale
+        inps = inps[lookback - 1 :, :]
 
-        # add timestamps
+        # loop through way points
 
-        traj = np.append(traj, rew_t[1:, None], axis=1)
+        for i in range(npoints):
+            wp = (wpoints[i, :] - rew_min) / (rew_max - rew_min + eps)
+            wp_next = (wpoints[i + 1, :] - rew_min) / (rew_max - rew_min + eps)
+            idx = np.where(xp < x[i])[0]
+            n = len(idx)
 
-        trajectories.append(traj)
+            # observing tool corrdinates
 
-    return trajectories
+            rp = rews[:n, :]
+            from_rp_to_wp = wp - rp
+            from_rp_to_wp_next = wp_next - rp
+            from_rp_to_wp_with_lookback = np.hstack([from_rp_to_wp[k : n - lookback + k + 1, :] for k in range(lookback)])
+            from_rp_to_wp_next_with_lookback = np.hstack([from_rp_to_wp_next[k : n - lookback + k + 1, :] for k in range(lookback)])
+            traj = np.hstack([from_rp_to_wp_with_lookback, from_rp_to_wp_next_with_lookback])
+
+            # add signal values
+
+            if use_signals:
+                traj = np.append(traj, ios_with_lookback[: n - lookback + 1, :], axis=1)
+
+            # add actions
+
+            traj = np.append(traj, inps[:n - lookback + 1, :], axis=1)
+
+            # add to the list
+
+            trajectories.append(traj)
+
+    return np.vstack(trajectories), waypoints

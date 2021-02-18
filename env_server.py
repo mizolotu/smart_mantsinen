@@ -129,6 +129,7 @@ def get_or_post_action():
         if id in backend_ids:
             idx = backend_ids.index(id)
             if request.method == 'GET':
+                backends[idx].update({'t_action_get': time()})
                 result = {'t_action': None, 'action': [], 'conditional': []}
                 for key in result.keys():
                     if key in backends[idx].keys():
@@ -140,7 +141,7 @@ def get_or_post_action():
                     if key in jdata.keys():
                         value = jdata[key]
                         backends[idx].update({key: value})
-                result = {'t_config': backends[idx]['t_config']}
+                result = {'t_action': backends[idx]['t_action_get']}
         else:
             result = {'Error': 'no such backend'}
     else:

@@ -47,16 +47,17 @@ def get_state(url, id):
         print(e)
     return state, reward, conditional, t_state
 
-def set_action(url, id, action, conditional):
-    result = False
-    try:
-        r = requests.post('{0}/action'.format(url), json={'id': id, 'action': action, 'conditional': conditional})
-        data = r.json()
-        if 't_config' in data.keys() and data['t_config'] is not None:
-            result = True
-    except Exception as e:
-        print(e)
-    return result
+def set_action(url, id, action, conditional, last_action_time):
+    ready = False
+    while not ready:
+        try:
+            r = requests.post('{0}/action'.format(url), json={'id': id, 'action': action, 'conditional': conditional})
+            data = r.json()
+            if 't_action' in data.keys() and data['t_action'] is not None and data['t_action'] > last_action_time:
+                ready = True
+        except Exception as e:
+            print(e)
+    return data['t_action']
 
 def delete_id(url, id):
     result = False
