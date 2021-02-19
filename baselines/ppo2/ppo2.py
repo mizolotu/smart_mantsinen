@@ -110,7 +110,7 @@ class PPO2(ActorCriticRLModel):
             return policy.obs_ph, self.action_ph, policy.policy
         return policy.obs_ph, self.action_ph, policy.deterministic_action # policy.action will train logstd, but is it ok? not sure...
 
-    def pretrain(self, data, n_epochs=10, learning_rate=1e-4, adam_epsilon=1e-8, val_interval=None, l2_loss_weight=0.001):
+    def pretrain(self, data, n_epochs=10, learning_rate=1e-4, adam_epsilon=1e-8, val_interval=None, l2_loss_weight=0.0, log_freq=100):
         """
         Pretrain a model using behavior cloning:
         supervised learning given an expert dataset.
@@ -153,7 +153,7 @@ class PPO2(ActorCriticRLModel):
             self.sess.run(tf.compat.v1.global_variables_initializer())
 
         if self.verbose > 0:
-            print("Pretraining with behavior cloning...")
+            print("Pretraining with behavior cloning:")
 
         obs_dim = self.observation_space.shape[0]
         act_dim = self.action_space.shape[0]
@@ -186,7 +186,7 @@ class PPO2(ActorCriticRLModel):
                 train_loss += train_loss_
 
             train_loss /= nbatches
-            if n_epochs <= 100 or ((epoch_idx + 1) % (n_epochs // 100)) == 0:
+            if self.verbose > 0 and (n_epochs <= log_freq or ((epoch_idx + 1) % (n_epochs // log_freq))) == 0:
                 print('Epoch {0}/{1}: loss = {2}'.format(epoch_idx + 1, n_epochs, train_loss))
 
             if self.debug:
