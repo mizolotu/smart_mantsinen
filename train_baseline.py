@@ -29,7 +29,7 @@ if __name__ == '__main__':
     action_scale = 100
     npoints = 128
     lookback = 4
-    dist_thr = 0.001
+    wp_dist = 1
 
     # process arguments
 
@@ -38,6 +38,8 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--server', help='Server URL.', default='http://127.0.0.1:5000')
     parser.add_argument('-t', '--trajectories', help='Trajectory files.', default='trajectory1.csv,trajectory2.csv,trajectory3.csv,trajectory4.csv')
     parser.add_argument('-o', '--output', help='Result output.', default='models/mevea/mantsinen/ppo')
+    parser.add_argument('-c', '--checkpoint', help='Checkpoint file.', default='models/mevea/mantsinen/ppo/model_checkpoints/rl_model_0_steps.zip')
+    parser.add_argument('-g', '--goon', type=bool, help='Continue training?', default=True)
     args = parser.parse_args()
 
     # check that server is running
@@ -49,18 +51,21 @@ if __name__ == '__main__':
     # prepare training data
 
     trajectory_files = [osp.join(trajectory_dir, fpath) for fpath in args.trajectories.split(',')]
-    bc_data, waypoints = prepare_trajectories(signal_dir, trajectory_files, use_signals=use_signals, action_scale=action_scale, npoints=npoints, lookback=lookback)
+    bc_data, waypoints, bonus = prepare_trajectories(signal_dir, trajectory_files, use_signals=use_signals, action_scale=action_scale, lookback=lookback, wp_dist=wp_dist)
 
     # create environments
 
-    env_fns = [make_env(MantsinenBasic, args.model, signal_dir, args.server, data, lookback, use_signals, action_scale, dist_thr) for data in waypoints]
+    env_fns = [make_env(MantsinenBasic, args.model, signal_dir, args.server, data, lookback, use_signals, action_scale, wp_dist, bonus) for data in waypoints]
     env = MeveaVecEnv(env_fns)
 
     try:
 
         # load model
 
-        checkpoint_file = find_checkpoint_with_max_step('{0}/model_checkpoints/'.format(args.output))
+        if args.checkpoint == '':
+            checkpoint_file = find_checkpoint_with_max_step('{0}/model_checkpoints/'.format(args.output))
+        else:
+            checkpoint_file = args.checkpoint
         model = ppo.load(checkpoint_file)
         model.set_env(env)
         print('Model has been successfully loaded from {0}'.format(checkpoint_file))
@@ -80,6 +85,8 @@ if __name__ == '__main__':
     finally:
 
         # continue training
+        callbacks = []
+        if args.goon:
+            callbacks.append(CheckpointCallback(save_freq=2048, save_path='{0}/model_checkpoints/'.format(args.output)))
 
-        checkpoint_callback = CheckpointCallback(save_freq=2048, save_path='{0}/model_checkpoints/'.format(args.output))
-        model.learn(total_timesteps=nsteps, callback=[checkpoint_callback])
+        model.learn(total_timesteps=nsteps, callback=callbacks)

@@ -153,7 +153,7 @@ class PPO2(ActorCriticRLModel):
             self.sess.run(tf.compat.v1.global_variables_initializer())
 
         if self.verbose > 0:
-            print("Pretraining with behavior cloning:")
+            print("Pretraining with behavior cloning for {0} epochs on {1} samples:".format(n_epochs, data.shape[0]))
 
         obs_dim = self.observation_space.shape[0]
         act_dim = self.action_space.shape[0]
@@ -186,7 +186,7 @@ class PPO2(ActorCriticRLModel):
                 train_loss += train_loss_
 
             train_loss /= nbatches
-            if self.verbose > 0 and (n_epochs <= log_freq or ((epoch_idx + 1) % (n_epochs // log_freq))) == 0:
+            if self.verbose > 0 and (n_epochs <= log_freq or ((epoch_idx + 1) % (n_epochs // log_freq)) == 0):
                 print('Epoch {0}/{1}: loss = {2}'.format(epoch_idx + 1, n_epochs, train_loss))
 
             if self.debug:
