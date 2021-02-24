@@ -51,7 +51,7 @@ python env_server.py
 2. Start or continue training the PPO agent:
 
 ```bash
-python train_baseline.py -m <path_to_mantsinen_model> 
+python train_baseline.py -m <path_to_mantsinen_model> -c <path_to_checkpoint_file>
 ```
 
 ## Postprocessing
