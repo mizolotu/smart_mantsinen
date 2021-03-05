@@ -1,8 +1,3 @@
-
-
-
-https://user-images.githubusercontent.com/38492363/110119370-636bc000-7dc4-11eb-8dcc-f7155af16b68.mp4
-
 # Smart Mantsinen (work in progress)
 
 ## Requirements
@@ -66,5 +61,19 @@ python train_baseline.py -m <path_to_mantsinen_model> -c <path_to_checkpoint_fil
 ```bash
 python clean_checkpoints.py -c <path_to_checkpoint_directory> 
 ```
+
+## Results
+
+<img src="figures/mevea/mantsinen/ppo/score_path.png" width="300"/> <img src="figures/mevea/mantsinen/ppo/score_target.png" width="300"/> <img src="figures/mevea/mantsinen/ppo/score_total.png" width="300"/>
+
+Model evaluation:
+- after 0 steps (behavioral training): https://drive.google.com/file/d/1OrJwJ3Q-uJLsvlTzfPj1l3ttWdvkmRXJ/view?usp=sharing
+- after 10M steps: https://drive.google.com/file/d/1YFqbrUANQPN1o437EsJBH3Q8nir4IvRL/view?usp=sharing
+- after 20M steps: https://drive.google.com/file/d/1OrJwJ3Q-uJLsvlTzfPj1l3ttWdvkmRXJ/view?usp=sharing
+- after 30M steps: https://drive.google.com/file/d/1B1QjsVcsRmkuhcauAZ12ISj6zP6YDO_k/view?usp=sharing
+- after 40M steps: https://drive.google.com/file/d/1uUpJS35FlJjA68r1HwOVOuaR7Zdky3i7/view?usp=sharing
+- after 50M steps: https://drive.google.com/file/d/1shE-FWRYEHjva0uswLGYdFPAHOFlOkHv/view?usp=sharing
+- after 60M steps: https://drive.google.com/file/d/1dqPUNNsyTwmSd-jxcjujaCaP_KMqdU09/view?usp=sharing
+
 
 
