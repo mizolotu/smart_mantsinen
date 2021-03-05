@@ -64,7 +64,7 @@ python clean_checkpoints.py -c <path_to_checkpoint_directory>
 
 ## Results
 
-<img src="figures/mevea/mantsinen/ppo/path_score.png" width="300"/> <img src="figures/mevea/mantsinen/ppo/target_score.png" width="300"/> <img src="figures/mevea/mantsinen/ppo/total_score.png" width="300"/>
+<img src="figures/mevea/mantsinen/ppo/path_score.png" width="200"/> <img src="figures/mevea/mantsinen/ppo/target_score.png" width="200"/> <img src="figures/mevea/mantsinen/ppo/total_score.png" width="200"/>
 
 Model evaluation:
 - after 0 steps (behavioral training): https://drive.google.com/file/d/1ApChpqPnCdD1gv98iIlTxZ9vu00eehPP/view?usp=sharing
