@@ -16,6 +16,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     score_keys = ['ep_reward_mean', 'ep_reward_c1_mean', 'ep_reward_c2_mean']
+    score_labels = ['Total score', 'Score for following the path', 'Score for reaching the target']
     score_names = ['total_score', 'path_score', 'target_score']
     some_colors = ['rgb(64,120,211)', 'rgb(0,100,80)', 'rgb(237,2,11)']
     more_colors = ['rgb(255,165,0)', 'rgb(139,0,139)', 'rgb(0,51,102)']
@@ -25,12 +26,12 @@ if __name__ == '__main__':
     x = p['total_timesteps'].values
     xlabel = 'Timesteps'
 
-    for color, key, name in zip(some_colors, score_keys, score_names):
+    for color, key, label, name in zip(some_colors, score_keys, score_labels, score_names):
         y = moving_average(p[key].values.reshape(-1, 1), window=1)[:, 0]
         data = [[x, y]]
         colors = [color]
-        names = [name]
-        ylabel = name
+        names = [label]
+        ylabel = label
 
         traces, layout = generate_line_scatter(names, data, colors, xlabel, ylabel, xrange=[0, 60e6])
 
