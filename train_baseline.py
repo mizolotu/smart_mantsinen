@@ -11,6 +11,7 @@ from common.mevea_runner import MeveaRunner
 from common.model_utils import find_checkpoint_with_max_step
 from common.data_utils import prepare_trajectories
 from common.callbacks import CheckpointCallback
+from common import logger
 
 def make_env(env_class, *args):
     fn = lambda: env_class(*args)
@@ -23,11 +24,12 @@ if __name__ == '__main__':
     trajectory_dir = 'data/trajectory_examples'
     signal_dir = 'data/signals'
 
-    nsteps = 100000000
+    npretrain = 10000
+    ntrain = 10000000000
     sleep_interval = 3
-    use_signals = True
+    use_inputs = True
+    use_outputs = True
     action_scale = 100
-    npoints = 128
     lookback = 4
     wp_dist = 1
 
@@ -42,6 +44,11 @@ if __name__ == '__main__':
     parser.add_argument('-g', '--goon', type=bool, help='Continue training?', default=True)
     args = parser.parse_args()
 
+    # configure logger
+
+    format_strs = os.getenv('', 'stdout,log,csv').split(',')
+    logger.configure(os.path.abspath(args.output), format_strs)
+
     # check that server is running
 
     while not is_server_running(args.server):
@@ -51,11 +58,11 @@ if __name__ == '__main__':
     # prepare training data
 
     trajectory_files = [osp.join(trajectory_dir, fpath) for fpath in args.trajectories.split(',')]
-    bc_data, waypoints, bonus = prepare_trajectories(signal_dir, trajectory_files, use_signals=use_signals, action_scale=action_scale, lookback=lookback, wp_dist=wp_dist)
+    bc_train, bc_val, waypoints = prepare_trajectories(signal_dir, trajectory_files, use_inputs=use_inputs, use_outputs=use_outputs, action_scale=action_scale, lookback=lookback, wp_dist=wp_dist)
 
     # create environments
 
-    env_fns = [make_env(MantsinenBasic, args.model, signal_dir, args.server, data, lookback, use_signals, action_scale, wp_dist, bonus) for data in waypoints]
+    env_fns = [make_env(MantsinenBasic, args.model, signal_dir, args.server, data, lookback, use_inputs, use_outputs, action_scale, wp_dist) for data in waypoints]
     env = MeveaVecEnv(env_fns)
 
     try:
@@ -79,14 +86,14 @@ if __name__ == '__main__':
         # create and pretrain model
 
         model = ppo(MlpPolicy, env, runner=MeveaRunner, nminibatches=len(waypoints), verbose=1)
-        model.pretrain(bc_data, n_epochs=10000, log_freq=10000)
+        model.pretrain(bc_train, bc_val, n_epochs=npretrain, log_freq=npretrain)
         model.save('{0}/model_checkpoints/rl_model_0_steps.zip'.format(args.output))
 
     finally:
 
         # continue training
+
         callbacks = []
         if args.goon:
             callbacks.append(CheckpointCallback(save_freq=2048, save_path='{0}/model_checkpoints/'.format(args.output)))
-
-        model.learn(total_timesteps=nsteps, callback=callbacks)
+        model.learn(total_timesteps=ntrain, callback=callbacks)

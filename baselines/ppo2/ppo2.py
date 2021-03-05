@@ -110,7 +110,8 @@ class PPO2(ActorCriticRLModel):
             return policy.obs_ph, self.action_ph, policy.policy
         return policy.obs_ph, self.action_ph, policy.deterministic_action # policy.action will train logstd, but is it ok? not sure...
 
-    def pretrain(self, data, n_epochs=10, learning_rate=1e-4, adam_epsilon=1e-8, val_interval=None, l2_loss_weight=0.0, log_freq=100):
+    def pretrain(self, data_tr, data_val, n_epochs=10, learning_rate=1e-4, adam_epsilon=1e-8, val_interval=None, l2_loss_weight=0.0, log_freq=100):
+
         """
         Pretrain a model using behavior cloning:
         supervised learning given an expert dataset.
@@ -125,6 +126,7 @@ class PPO2(ActorCriticRLModel):
             By default, every 10th of the maximum number of epochs.
         :return: (BaseRLModel) the pretrained model
         """
+
         continuous_actions = isinstance(self.action_space, gym.spaces.Box)
         discrete_actions = isinstance(self.action_space, gym.spaces.Discrete)
 
@@ -153,13 +155,14 @@ class PPO2(ActorCriticRLModel):
             self.sess.run(tf.compat.v1.global_variables_initializer())
 
         if self.verbose > 0:
-            print("Pretraining with behavior cloning for {0} epochs on {1} samples:".format(n_epochs, data.shape[0]))
+            print("Pretraining with behavior cloning for {0} epochs on {1} samples of size {2}:".format(n_epochs, data_tr.shape[0], data_tr.shape[1]))
 
         obs_dim = self.observation_space.shape[0]
         act_dim = self.action_space.shape[0]
 
-        ndata = data.shape[0]
-        nbatches = ndata // self.n_steps
+        ntrain = data_tr.shape[0]
+        nbatches = ntrain // self.n_steps
+
         for epoch_idx in range(int(n_epochs)):
 
             if self.debug:
@@ -172,22 +175,31 @@ class PPO2(ActorCriticRLModel):
 
             train_loss = 0.0
 
-            # Full pass on the training set
+            # training
 
             for i in range(nbatches):
-                idx = np.random.choice(ndata, self.n_steps)
-                expert_obs, expert_actions = data[idx, :obs_dim], data[idx, obs_dim:obs_dim+act_dim]
+                idx = np.random.choice(ntrain, self.n_steps)
+                expert_obs, expert_actions = data_tr[idx, :obs_dim], data_tr[idx, obs_dim:obs_dim+act_dim]
                 feed_dict = {
                     obs_ph: expert_obs,
                     actions_ph: expert_actions
                 }
-
                 train_loss_, _ = self.sess.run([loss, optim_op], feed_dict)
                 train_loss += train_loss_
-
             train_loss /= nbatches
+
+            # validation
+
+            expert_obs, expert_actions = data_val[:, :obs_dim], data_val[:, obs_dim:obs_dim + act_dim]
+            feed_dict = {
+                obs_ph: expert_obs,
+                actions_ph: expert_actions
+            }
+
+            val_loss, _ = self.sess.run([loss, optim_op], feed_dict)
+
             if self.verbose > 0 and (n_epochs <= log_freq or ((epoch_idx + 1) % (n_epochs // log_freq)) == 0):
-                print('Epoch {0}/{1}: loss = {2}'.format(epoch_idx + 1, n_epochs, train_loss))
+                print('Epoch {0}/{1}: training loss = {2}, validation_loss = {3}'.format(epoch_idx + 1, n_epochs, train_loss, val_loss))
 
             if self.debug:
                 with self.graph.as_default():
@@ -445,9 +457,6 @@ class PPO2(ActorCriticRLModel):
                 rollout = self.runner.run(callback)
                 # Unpack
                 obs, returns, masks, actions, values, neglogpacs, states, ep_infos, true_reward = rollout
-
-                self.reward = safe_mean([ep_info['r'] for ep_info in self.ep_info_buf])
-
                 callback.on_rollout_end()
 
                 # Early stopping due to the callback
@@ -509,7 +518,8 @@ class PPO2(ActorCriticRLModel):
                     logger.logkv("explained_variance", float(explained_var))
                     if len(self.ep_info_buf) > 0 and len(self.ep_info_buf[0]) > 0:
                         logger.logkv('ep_reward_mean', safe_mean([ep_info['r'] for ep_info in self.ep_info_buf]))
-                        #logger.logkv('ep_len_mean', safe_mean([ep_info['l'] for ep_info in self.ep_info_buf]))
+                        logger.logkv('ep_reward_c1_mean', safe_mean([ep_info['rc1'] for ep_info in self.ep_info_buf]))
+                        logger.logkv('ep_reward_c2_mean', safe_mean([ep_info['rc2'] for ep_info in self.ep_info_buf]))
                     logger.logkv('time_elapsed', t_start - t_first_start)
                     for (loss_val, loss_name) in zip(loss_vals, self.loss_names):
                         logger.logkv(loss_name, loss_val)
@@ -517,6 +527,12 @@ class PPO2(ActorCriticRLModel):
 
             callback.on_training_end()
             return self
+
+    def demo(self, video_file=None):
+        assert self.env.num_envs == 1, "You must pass only one environment when using this function"
+        rollout = self.runner._run(video_file)
+        obs, returns, masks, actions, values, neglogpacs, states, ep_infos, true_reward = rollout
+        print('Reward: {0}'.format(np.mean(true_reward)))
 
     def save(self, save_path, cloudpickle=False):
         data = {
