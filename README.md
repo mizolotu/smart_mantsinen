@@ -19,9 +19,9 @@ git clone https://github.com/mizolotu/SmartMantsinen
 python -m pip install -r requirements.txt
 ```
 
-3. Open Mevea Modeller and load Mantsinen Model. Go to Scripting -> Scripts, create a new script object, select ```env_backend.py``` from "SmartMantsinen" directory as the file name in the object view. Go to I/O -> Inputs -> AI_Machine_Bus_Aux1_RPDO1_u16Y49_BoomLc (or any other input component) and select the object just created as the script name. 
+3. Open Mevea Modeller and load Mantsinen Model. Go to Scripting -> Scripts, create a new script object, select ```env_backend.py``` from ```SmartMantsinen``` directory as the file name in the object view. Go to ```I/O``` -> ```Inputs``` -> ```AI_Machine_Bus_Aux1_RPDO1_u16Y49_BoomLc``` (or any other input component) and select the object just created as the script name. 
 
-4. In terminal, navigate to the Mevea Software resources directory (default: C:\Program Files (x86)\Mevea\Resources\Python\Bin) and install numpy and requests:
+4. In terminal, navigate to the Mevea Software resources directory (default: ```C:\Program Files (x86)\Mevea\Resources\Python\Bin```) and install numpy and requests:
 ```bash
 python -m pip install numpy requests
 ```
@@ -32,7 +32,7 @@ python -m pip install numpy requests
 
 ## Preprocessing
 
-1. From "SmartMantsinen" directory start the server script: 
+1. From ```SmartMantsinen``` directory start the server script: 
 ```
 bash python env_server.py
 ```
@@ -47,7 +47,7 @@ python standardize_data.py
 
 ## Training
 
-1. From "SmartMantsinen" directory start the server script, if it has not yet been started: 
+1. From ```SmartMantsinen``` directory start the server script, if it has not yet been started: 
 ```bash
 python env_server.py
 ```
