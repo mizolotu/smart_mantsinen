@@ -26,15 +26,19 @@ python -m pip install -r requirements.txt
 python -m pip install numpy requests
 ```
 
+5. Open Mevea Solver, go to Settings, and enable automatic start. Close the solver.
+
+6. Open file ```config.py```
+
 ## Preprocessing
 
 1. From "SmartMantsinen" directory start the server script: 
 ```bash
 python env_server.py
 ```
-2. Convert .ob file to .csv to extract trajectory data:
+2. Replay .ob file to record the trajectory data into .csv:
 ```bash
-python process_trajectory.py -m <path_to_mantsinen_model> -o <output_file>
+python process_trajectory.py -o <output_file>
 ```
 3. Update minimum and maximum data values for input, output and reward signals:
 ```bash
