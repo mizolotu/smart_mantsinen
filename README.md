@@ -62,7 +62,7 @@ python train_baseline.py -c <path_to_checkpoint_file>
 
 1. Plot reward evolution:
  ```bash
-python plot_reward.py
+python plot_results.py
 ```
 2. Demonstrate the policy trained:
 ```bash
