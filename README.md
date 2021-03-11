@@ -80,7 +80,7 @@ python clean_checkpoints.py -c <path_to_checkpoint_directory>
 <img src="figures/mevea/mantsinen/ppo/path_score.png" width="200"/> <img src="figures/mevea/mantsinen/ppo/target_score.png" width="200"/> <img src="figures/mevea/mantsinen/ppo/total_score.png" width="200"/>
 
 Model evaluation:
-- after 0 steps (behavioral training): https://drive.google.com/file/d/1ApChpqPnCdD1gv98iIlTxZ9vu00eehPP/view?usp=sharing
+- after 0 steps (behavioral clonning): https://drive.google.com/file/d/1ApChpqPnCdD1gv98iIlTxZ9vu00eehPP/view?usp=sharing
 - after 10M steps: https://drive.google.com/file/d/1YFqbrUANQPN1o437EsJBH3Q8nir4IvRL/view?usp=sharing
 - after 20M steps: https://drive.google.com/file/d/1OrJwJ3Q-uJLsvlTzfPj1l3ttWdvkmRXJ/view?usp=sharing
 - after 30M steps: https://drive.google.com/file/d/1B1QjsVcsRmkuhcauAZ12ISj6zP6YDO_k/view?usp=sharing
