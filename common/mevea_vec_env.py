@@ -1,10 +1,8 @@
-import multiprocessing
-from collections import OrderedDict
-from typing import Sequence
-
-import gym
+import gym, multiprocessing
 import numpy as np
 
+from collections import OrderedDict
+from typing import Sequence
 from common.base_vec_env import VecEnv, CloudpickleWrapper
 
 def _worker(remote, parent_remote, env_fn_wrapper):
@@ -73,6 +71,7 @@ class MeveaVecEnv(VecEnv):
 
     def __init__(self, env_fns, start_method=None):
         self.waiting = False
+        self.waiting_one = [False for _ in env_fns]
         self.closed = False
         n_envs = len(env_fns)
 
@@ -113,6 +112,20 @@ class MeveaVecEnv(VecEnv):
         obs, rews, dones, infos = zip(*results)
         return _flatten_obs(obs, self.observation_space), np.stack(rews), np.stack(dones), infos
 
+    def step_one(self, env_idx, action):
+        self.step_async_one(env_idx, action[0])
+        return self.step_wait_one(env_idx)
+
+    def step_async_one(self, env_idx, action):
+        self.remotes[env_idx].send(('step', action))
+        self.waiting_one[env_idx] = True
+
+    def step_wait_one(self, env_idx):
+        results = self.remotes[env_idx].recv()
+        self.waiting_one[env_idx] = False
+        obs, rew, done, info = results
+        return _flatten_obs([obs], self.observation_space)[0], rew, done, info
+
     def seed(self, seed=None):
         for idx, remote in enumerate(self.remotes):
             remote.send(('seed', seed + idx))
@@ -129,6 +142,9 @@ class MeveaVecEnv(VecEnv):
             return
         if self.waiting:
             for remote in self.remotes:
+                remote.recv()
+        for i, remote in enumerate(self.remotes):
+            if self.waiting[i]:
                 remote.recv()
         for remote in self.remotes:
             remote.send(('close', None))

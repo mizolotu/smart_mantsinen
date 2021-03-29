@@ -9,7 +9,7 @@ def get_solver_path(hkey=r'Software\WOW6432Node\Mevea\Mevea Simulation Software'
     winreg.CloseKey(regkey)
     return solver_path
 
-def start_solver(solver_path, model_path, headless=False):
+def start_solver(solver_path, model_path, headless=True):
     solver_args = [solver_path, r'/mvs', model_path]
     if headless:
         solver_args.append(r'/headless')

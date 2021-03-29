@@ -51,8 +51,8 @@ class PPO2(ActorCriticRLModel):
     :param n_cpu_tf_sess: (int) The number of threads for TensorFlow operations
         If None, the number of cpu of the current machine will be used.
     """
-    def __init__(self, policy, env, runner, gamma=0.99, n_steps=2048, ent_coef=0.0, learning_rate=2.5e-4, vf_coef=0.5,
-                 max_grad_norm=0.5, lam=0.95, nminibatches=2, noptepochs=8, cliprange=0.2, cliprange_vf=None,
+    def __init__(self, policy, env, runner, gamma=0.99, n_steps=2048, ent_coef=0.0001, learning_rate=1e-4, vf_coef=0.5,
+                 max_grad_norm=0.5, lam=0.95, nminibatches=16, noptepochs=8, cliprange=0.2, cliprange_vf=None,
                  verbose=1, tensorboard_log=None, _init_setup_model=True, policy_kwargs=None,
                  full_tensorboard_log=False, seed=None, n_cpu_tf_sess=None):
 
@@ -221,7 +221,7 @@ class PPO2(ActorCriticRLModel):
             assert issubclass(self.policy, ActorCriticPolicy), "Error: the input policy for the PPO2 model must be " \
                                                                "an instance of common_.policies.ActorCriticPolicy."
 
-            self.n_batch = self.n_envs * self.n_steps
+            self.n_batch = self.n_envs * self.n_steps  # total number of samples in the batch
 
             self.graph = tf.Graph()
             with self.graph.as_default():
@@ -354,6 +354,12 @@ class PPO2(ActorCriticRLModel):
                 self.initial_state = act_model.initial_state
                 tf.compat.v1.global_variables_initializer().run(session=self.sess)  # pylint: disable=E1101
 
+                with self.graph.as_default():
+                    vars = tf.compat.v1.trainable_variables()
+                    vars_vals = self.sess.run(vars)
+                    for var, val in zip(vars, vars_vals):
+                        print('Var: {0}'.format(var))
+
                 #vars = tf.compat.v1.trainable_variables()
                 #vars_vals = self.sess.run(vars)
                 #for var, val in zip(vars, vars_vals):
@@ -472,8 +478,7 @@ class PPO2(ActorCriticRLModel):
                     for epoch_num in range(self.noptepochs):
                         np.random.shuffle(inds)
                         for start in range(0, self.n_batch, batch_size):
-                            timestep = self.num_timesteps // update_fac + ((epoch_num *
-                                                                            self.n_batch + start) // batch_size)
+                            timestep = self.num_timesteps // update_fac + ((epoch_num * self.n_batch + start) // batch_size)
                             end = start + batch_size
                             mbinds = inds[start:end]
                             slices = (arr[mbinds] for arr in (obs, returns, masks, actions, values, neglogpacs))
@@ -520,6 +525,7 @@ class PPO2(ActorCriticRLModel):
                         logger.logkv('ep_reward_mean', safe_mean([ep_info['r'] for ep_info in self.ep_info_buf]))
                         logger.logkv('ep_reward_c1_mean', safe_mean([ep_info['rc1'] for ep_info in self.ep_info_buf]))
                         logger.logkv('ep_reward_c2_mean', safe_mean([ep_info['rc2'] for ep_info in self.ep_info_buf]))
+                        logger.logkv('ep_reward_c3_mean', safe_mean([ep_info['rc3'] for ep_info in self.ep_info_buf]))
                     logger.logkv('time_elapsed', t_start - t_first_start)
                     for (loss_val, loss_name) in zip(loss_vals, self.loss_names):
                         logger.logkv(loss_name, loss_val)
@@ -530,7 +536,7 @@ class PPO2(ActorCriticRLModel):
 
     def demo(self, video_file=None):
         assert self.env.num_envs == 1, "You must pass only one environment when using this function"
-        rollout = self.runner._run(video_file)
+        rollout = self.runner._run(video_file, headless=False)
         obs, returns, masks, actions, values, neglogpacs, states, ep_infos, true_reward = rollout
         print('Reward: {0}'.format(np.mean(true_reward)))
 

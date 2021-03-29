@@ -18,7 +18,8 @@ def find_checkpoint_with_latest_date(checkpoint_dir, prefix='rl_model_'):
 
 def clean_checkpoint_directory(checkpoint_dir, exclude=[], prefix='rl_model_'):
     checkpoint_files = [item for item in os.listdir(checkpoint_dir) if osp.isfile(osp.join(checkpoint_dir, item)) and item.startswith(prefix) and item.endswith('.zip')]
-    checkpoint_fpaths = [osp.join(checkpoint_dir, item) for item in checkpoint_files]
+    checkpoint_fpaths = [osp.normpath(osp.join(checkpoint_dir, item)) for item in checkpoint_files]
+    exclude = [osp.normpath(item) for item in exclude]
     for fpath in checkpoint_fpaths:
         if fpath not in exclude:
             print('Deleting {0}'.format(fpath))

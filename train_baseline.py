@@ -1,5 +1,6 @@
 import argparse, os, sys
 import os.path as osp
+import numpy as np
 
 from env_frontend import MantsinenBasic
 from common.server_utils import is_server_running
@@ -12,6 +13,7 @@ from common.model_utils import find_checkpoint_with_max_step
 from common.data_utils import prepare_trajectories
 from common.callbacks import CheckpointCallback
 from common import logger
+from config import *
 
 def make_env(env_class, *args):
     fn = lambda: env_class(*args)
@@ -19,58 +21,42 @@ def make_env(env_class, *args):
 
 if __name__ == '__main__':
 
-    # parameters
-
-    trajectory_dir = 'data/trajectory_examples'
-    signal_dir = 'data/signals'
-
-    npretrain = 10000
-    ntrain = 10000000000
-    sleep_interval = 3
-    use_inputs = True
-    use_outputs = True
-    action_scale = 100
-    lookback = 4
-    wp_dist = 1
-
     # process arguments
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-m', '--model', help='File path to the Mevea model.', default='C:\\Users\\mevea\\MeveaModels\\Mantsinen\\Models\\Mantsinen300M\\300M_fixed.mvs')
-    parser.add_argument('-s', '--server', help='Server URL.', default='http://127.0.0.1:5000')
-    parser.add_argument('-t', '--trajectories', help='Trajectory files.', default='trajectory1.csv,trajectory2.csv,trajectory3.csv,trajectory4.csv')
-    parser.add_argument('-o', '--output', help='Result output.', default='models/mevea/mantsinen/ppo')
-    parser.add_argument('-c', '--checkpoint', help='Checkpoint file.', default='models/mevea/mantsinen/ppo/model_checkpoints/rl_model_0_steps.zip')
+    parser.add_argument('-c', '--checkpoint', help='Checkpoint file.')  #, default='models/mevea/mantsinen/ppo/model_checkpoints/rl_model_0_steps.zip')
     parser.add_argument('-g', '--goon', type=bool, help='Continue training?', default=True)
     args = parser.parse_args()
 
     # configure logger
 
     format_strs = os.getenv('', 'stdout,log,csv').split(',')
-    logger.configure(os.path.abspath(args.output), format_strs)
+    logger.configure(os.path.abspath(model_output), format_strs)
 
     # check that server is running
 
-    while not is_server_running(args.server):
+    while not is_server_running(server):
         print('Start the server: python3 env_server.py')
         sleep(sleep_interval)
 
     # prepare training data
 
-    trajectory_files = [osp.join(trajectory_dir, fpath) for fpath in args.trajectories.split(',')]
-    bc_train, bc_val, waypoints = prepare_trajectories(signal_dir, trajectory_files, use_inputs=use_inputs, use_outputs=use_outputs, action_scale=action_scale, lookback=lookback, wp_dist=wp_dist)
+    trajectory_files = [osp.join(trajectory_dir, fpath) for fpath in os.listdir(trajectory_dir) if fpath.endswith('csv')]
+    bc_train, bc_val, waypoints = prepare_trajectories(signal_dir, trajectory_files, use_inputs=use_inputs, use_outputs=use_outputs, action_scale=action_scale, lookback=lookback, tstep=tstep)
 
     # create environments
 
-    env_fns = [make_env(MantsinenBasic, args.model, signal_dir, args.server, data, lookback, use_inputs, use_outputs, action_scale, wp_dist) for data in waypoints]
+    n = len(waypoints)
+    wp_inds = np.random.choice(n, nenvs)
+    env_fns = [make_env(MantsinenBasic, model_path, signal_dir, server, waypoints[i], lookback, use_inputs, use_outputs, action_scale, tstep) for i in wp_inds]
     env = MeveaVecEnv(env_fns)
 
     try:
 
         # load model
 
-        if args.checkpoint == '':
-            checkpoint_file = find_checkpoint_with_max_step('{0}/model_checkpoints/'.format(args.output))
+        if args.checkpoint is None:
+            checkpoint_file = find_checkpoint_with_max_step('{0}/model_checkpoints/'.format(model_output))
         else:
             checkpoint_file = args.checkpoint
         model = ppo.load(checkpoint_file)
@@ -85,9 +71,9 @@ if __name__ == '__main__':
 
         # create and pretrain model
 
-        model = ppo(MlpPolicy, env, runner=MeveaRunner, nminibatches=len(waypoints), verbose=1)
+        model = ppo(MlpPolicy, env, runner=MeveaRunner, n_steps=nsteps, verbose=1)
         model.pretrain(bc_train, bc_val, n_epochs=npretrain, log_freq=npretrain)
-        model.save('{0}/model_checkpoints/rl_model_0_steps.zip'.format(args.output))
+        model.save('{0}/model_checkpoints/rl_model_0_steps.zip'.format(model_output))
 
     finally:
 
@@ -95,5 +81,5 @@ if __name__ == '__main__':
 
         callbacks = []
         if args.goon:
-            callbacks.append(CheckpointCallback(save_freq=2048, save_path='{0}/model_checkpoints/'.format(args.output)))
+            callbacks.append(CheckpointCallback(save_freq=nsteps, save_path='{0}/model_checkpoints/'.format(model_output)))
         model.learn(total_timesteps=ntrain, callback=callbacks)

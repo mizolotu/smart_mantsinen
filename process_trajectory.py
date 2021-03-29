@@ -3,7 +3,7 @@ import os.path as osp
 
 from common.data_utils import load_signals, save_trajectory, parse_conditional_signals, is_moving
 from common.solver_utils import get_solver_path, start_solver, stop_solver
-from common.server_utils import is_server_running, is_backend_registered, post_signals, get_state
+from common.server_utils import is_server_running, is_backend_registered, post_signals, post_action, get_state
 
 from time import sleep
 
@@ -20,7 +20,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-m', '--model', help='File path to the model.', default='C:\\Users\\mevea\\MeveaModels\\Mantsinen\\Models\\Mantsinen300M\\300M_fixed.mvs')
     parser.add_argument('-s', '--server', help='Server URL.', default='http://127.0.0.1:5000')
-    parser.add_argument('-o', '--output', help='Output file.', default='trajectory3.csv')
+    parser.add_argument('-o', '--output', help='Output file.', default='trajectory4.csv')
     parser.add_argument('-d', '--debug', help='Debug.', default=False, type=bool)
     args = parser.parse_args()
 
@@ -45,7 +45,7 @@ if __name__ == '__main__':
 
     solver_path = get_solver_path()
     if not args.debug:
-        proc = start_solver(solver_path, args.model)
+        proc = start_solver(solver_path, args.model, headless=False)
         backend_id = proc.pid
     else:
         backend_id = input('Start Mevea solver manually, and input the process id:\n')
@@ -75,16 +75,17 @@ if __name__ == '__main__':
 
     states = []
     rewards = []
+    conditional_values = []
     timestamps = []
     moving = False
     last_t_state = None
     move_t_start = None
     while not moving:
-        state, reward, conditional_values, t_state = get_state(args.server, backend_id)
-        moving = is_moving(conditional_signals, conditional_values, t_state)
-        last_t_state = t_state
+        post_action(args.server, backend_id, None, conditional_values, next_simulation_time=0)
+        state, reward, conditional_values, t_state_real, t_state_simulation = get_state(args.server, backend_id, last_state_time=0)
+        moving = is_moving(conditional_signals, conditional_values, t_state_simulation)
         if moving:
-            timestamps.append(t_state)
+            timestamps.append(t_state_simulation)
             states.append(state)
             rewards.append(reward)
 
@@ -93,15 +94,14 @@ if __name__ == '__main__':
     # record the trajectory and wait for the moving to stop
 
     while moving:
-        state, reward, conditional_values, t_state = get_state(args.server, backend_id)
-        if state is not None and reward is not None and t_state is not None:
-            if t_state > last_t_state:
-                moving = is_moving(conditional_signals, conditional_values, t_state)
-                last_t_state = t_state
-                if moving:
-                    states.append(state)
-                    rewards.append(reward)
-                    timestamps.append(t_state)
+        post_action(args.server, backend_id, None, conditional_values, next_simulation_time=0)
+        state, reward, conditional_values, t_state_real, t_state_simulation = get_state(args.server, backend_id, last_state_time=0)
+        if state is not None and reward is not None and t_state_simulation is not None:
+            moving = is_moving(conditional_signals, conditional_values, t_state_simulation)
+            if moving:
+                states.append(state)
+                rewards.append(reward)
+                timestamps.append(t_state_simulation)
 
     # save trajectory
 

@@ -96,7 +96,7 @@ def adjust_indexes(signals, identical_input_signals):
     act_index = np.array(act_index)
     return obs_input_index, act_index
 
-def prepare_trajectories(signal_dir, trajectory_files, use_inputs=True, use_outputs=True, action_scale=1, lookback=4, wp_dist=0.1):
+def prepare_trajectories(signal_dir, trajectory_files, n_waypoints=16, use_inputs=True, use_outputs=True, action_scale=1, lookback=4, tstep=0.01):
 
     # load signals and their limits
 
@@ -131,70 +131,91 @@ def prepare_trajectories(signal_dir, trajectory_files, use_inputs=True, use_outp
 
         rew_t, inputs, outputs, rewards = load_trajectory(fpath, signals)
 
-        # calculate way points
+        # calculate way points by interpolating over time
 
         n = len(rew_t)
-        xyz = rewards[0, :]
-        wpoints = [xyz]
-        for i in range(n):
-            d = np.linalg.norm(xyz - rewards[i, :])
-            if d > wp_dist:
-                xyz = rewards[i, :]
-                wpoints.append(xyz)
-        wpoints = np.vstack(wpoints)
+        duration = rew_t[-1] - rew_t[0]
+        waypoint_time_step = duration / (n_waypoints - 1)
+        waypoint_times = np.arange(0, n_waypoints) * waypoint_time_step
+        wpoints = np.zeros((n_waypoints, 3))
+        for i in range(3):
+            wpoints[:, i] = np.interp(waypoint_times, rew_t, rewards[:, i])
         waypoints.append(wpoints)
 
         # standardize data
 
-        rews_with_lookback = np.hstack([rewards[k: n - lookback + k + 1, :] for k in range(lookback)])
         is_std = (inputs - obs_input_min[None, :]) / (obs_input_max[None, :] - obs_input_min[None, :] + eps)
-        is_std_with_lookback = np.hstack([is_std[k : n - lookback + k + 1, :] for k in range(lookback)])
         os_std = (outputs - obs_output_min[None, :]) / (obs_output_max[None, :] - obs_output_min[None, :] + eps)
-        os_std_with_lookback = np.hstack([os_std[k: n - lookback + k + 1, :] for k in range(lookback)])
         inps = np.array(inputs)  # -inf..inf
         inps = (inps - act_min[None, :]) / (act_max[None, :] - act_min[None, :] + 1e-10)  # 0..1
         inps = action_scale * (2 * inps - 1)  # -scale..scale
-        inps = inps[lookback:, :]  # inputs are one step ahead of observation
+
+        # t start
+
+        lb_time = (lookback - 1) * tstep
+        idx0 = np.where(rew_t > lb_time)[0][1]
 
         # loop through trajectory points
 
         wp_first = wpoints[0, :]
         wp_last = wpoints[-1, :]
-        for i in range(lookback - 1, n - 1):
+        for i in range(idx0, n):
             dist_to_wps = np.linalg.norm(wpoints - rewards[i, :], axis=1)
             idx_sorted = np.argsort(dist_to_wps)
             wp_nearest_idx = idx_sorted[0]
-            wp_second_nearest_idx = idx_sorted[1]
             wp_nearest = wpoints[wp_nearest_idx, :]
-            wp_second_nearest = wpoints[wp_second_nearest_idx, :]
+
+            if wp_nearest_idx > 0:
+                wp_before_nearest_idx = wp_nearest_idx - 1
+            else:
+                wp_before_nearest_idx = wp_nearest_idx
+            wp_before_nearest = wpoints[wp_before_nearest_idx, :]
+
+            if wp_nearest_idx < n_waypoints - 1:
+                wp_after_nearest_idx = wp_nearest_idx + 1
+            else:
+                wp_after_nearest_idx = wp_nearest_idx
+            wp_after_nearest = wpoints[wp_after_nearest_idx, :]
 
             # creating obs
 
-            idx = i - lookback + 1
-            rp_with_loopback = rews_with_lookback[idx, :].reshape(lookback, 3)
-            from_rp_to_nearest_wp_with_lookback = wp_nearest - rp_with_loopback
-            from_rp_to_second_nearest_wp_with_lookback = wp_second_nearest - rp_with_loopback
-            from_rp_to_first_wp_with_lookback = wp_first - rp_with_loopback
-            from_rp_to_last_wp_with_lookback = wp_last - rp_with_loopback
+            rp_with_lookback = np.zeros((lookback, rewards.shape[1]))
+            is_std_with_lookback = np.zeros((lookback, inputs.shape[1]))
+            os_std_with_lookback = np.zeros((lookback, outputs.shape[1]))
+            for j in range(lookback):
+                t = rew_t[i - 1] - j * tstep
+                for k in range(rewards.shape[1]):
+                    rp_with_lookback[j, k] = np.interp(t, rew_t, rewards[:, k])
+                for k in range(inputs.shape[1]):
+                    is_std_with_lookback[j, k] = np.interp(t, rew_t, is_std[:, k])
+                for k in range(outputs.shape[1]):
+                    os_std_with_lookback[j, k] = np.interp(t, rew_t, os_std[:, k])
+            from_rp_to_nearest_wp_with_lookback = wp_nearest - rp_with_lookback
+            from_rp_to_before_nearest_wp_with_lookback = wp_before_nearest - rp_with_lookback
+            from_rp_to_after_nearest_wp_with_lookback = wp_after_nearest - rp_with_lookback
+            from_rp_to_first_wp_with_lookback = wp_first - rp_with_lookback
+            from_rp_to_last_wp_with_lookback = wp_last - rp_with_lookback
             traj = np.hstack([
                 (from_rp_to_first_wp_with_lookback.reshape(1, -1)[0] - v_min) / (v_max - v_min + eps),
+                (from_rp_to_before_nearest_wp_with_lookback.reshape(1, -1)[0] - v_min) / (v_max - v_min + eps),
                 (from_rp_to_nearest_wp_with_lookback.reshape(1, -1)[0] - v_min) / (v_max - v_min + eps),
-                (from_rp_to_second_nearest_wp_with_lookback.reshape(1, -1)[0] - v_min) / (v_max - v_min + eps),
+                (from_rp_to_after_nearest_wp_with_lookback.reshape(1, -1)[0] - v_min) / (v_max - v_min + eps),
                 (from_rp_to_last_wp_with_lookback.reshape(1, -1)[0] - v_min) / (v_max - v_min + eps)
             ])
 
             # add signal values
 
             if use_inputs:
-                traj = np.append(traj, is_std_with_lookback[idx, :])
+                traj = np.append(traj, is_std_with_lookback.reshape(1, -1)[0])
             if use_outputs:
-                traj = np.append(traj, os_std_with_lookback[idx, :])
+                traj = np.append(traj, os_std_with_lookback.reshape(1, -1)[0])
 
             # add actions
 
-            traj = np.append(traj, inps[idx, :])
+            traj = np.append(traj, inps[i, :])
 
             # add to the list
+
             if len(trajectory_files) > 1:
                 if ti < len(trajectory_files) - 1:
                     trajectories_tr.append(traj)

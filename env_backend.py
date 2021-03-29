@@ -1,5 +1,5 @@
 import sys, requests, os
-from time import time, sleep
+from time import sleep
 
 # gains and thresholds
 
@@ -11,8 +11,8 @@ sleep_interval = 1  # seconds
 
 http_url = 'http://127.0.0.1:5000'
 id_uri = 'id'
-state_uri = 'state'
-action_uri = 'action'
+state_uri = 'post_state'
+action_uri = 'get_action'
 signals_uri = 'signals'
 
 def post_id(id):
@@ -31,19 +31,21 @@ def get_signals(id):
         r = requests.get(uri, json={'id': id})
         jdata = r.json()
         signals = jdata['signals']
+        config_time = jdata['t_config']
     except:
         signals = {}
-    return signals
+        config_time = None
+    return signals, config_time
 
-def post_state_and_reward(id, state, reward, conditional):
+def post_state_and_reward(id, state, reward, conditional, t):
     uri = '{0}/{1}'.format(http_url, state_uri)
-    config_time = None
+    r_time = None
     try:
-        r = requests.post(uri, json={'id': id, 'state': state, 'reward': reward, 'conditional': conditional})
-        config_time = r.json()['t_config']
+        r = requests.post(uri, json={'id': id, 'state': state, 'reward': reward, 'conditional': conditional, 't_state_simulation': t})
+        r_time = r.json()['t_state_real']
     except Exception:
         print(Exception)
-    return config_time
+    return r_time
 
 def get_action(id):
     uri = '{0}/{1}'.format(http_url, action_uri)
@@ -52,68 +54,59 @@ def get_action(id):
         jdata = r.json()
         action = jdata['action']
         conditional_input = jdata['conditional']
-        action_time = jdata['t_action']
+        action_submission_real_time = jdata['t_action_real']
+        action_duration_simulation_time = jdata['t_action_simulation']
     except:
         action = []
         conditional_input = []
-        action_time = None
-    return action, conditional_input, action_time
+        action_submission_real_time = None
+        action_duration_simulation_time = None
+    return action, conditional_input, action_submission_real_time, action_duration_simulation_time
 
 def initScript():
 
-    # try to register
+    # register
 
     backend_id = os.getpid()
-    config_time = None
+    id_time = None
     n_attempts = 0
     print('Trying to register...')
-    while config_time is None:
-        config_time = post_id(backend_id)
+    while id_time is None:
+        id_time = post_id(backend_id)
         sleep(sleep_interval)
         n_attempts += 1
         if n_attempts >= attempts_max:
             sys.exit(1)
     print('Successfully registerd with id {0}!'.format(backend_id))
     GObject.data['id'] = backend_id
-    GObject.data['last_config_time'] = config_time
 
-    # signals
+    # init signals
 
-    GObject.data['signals'] = {
-        'input': [],
-        'output': [],
-        'reward': [],
-        'conditional': []
-    }
+    GObject.data['signals'] = None
 
-    # components
+    # init action variables
 
-    GObject.data['state_objects'] = [
-        GSolver.getParameter(input_signal, 'InputValue') for input_signal in GObject.data['signals']['input']
-    ] + [
-        GSolver.getParameter(output_signal, 'value') for output_signal in GObject.data['signals']['output'] + GObject.data['signals']['reward']
-    ]
+    GObject.data['current_action'] = None
+    GObject.data['current_conditional'] = None
 
-    GObject.data['reward_objects'] = [
-        GSolver.getParameter(output_signal, 'value') for output_signal in GObject.data['signals']['reward']
-    ]
+    # init time moments
 
-    GObject.data['conditional_objects'] = [
-        GSolver.getParameter(item, 'InputValue') for item in GObject.data['signals']['conditional']
-    ]
+    GObject.data['last_iteration_simulation_time'] = 0
+    GObject.data['last_action_real_time'] = 0
+    GObject.data['current_action_end_simulation_time'] = 0
+    GObject.data['last_state_sent_simulation_time'] = 0
 
-    # times
+    # other
 
-    GObject.data['last_iteration_time'] = time()
-    GObject.data['last_action_time'] = time()
+    GObject.data['in_action'] = False
 
 def callScript(deltaTime, simulationTime):
 
     # check if required time passed
 
     time_passed = False
-    t_now = time()
-    t_last = GObject.data['last_iteration_time']
+    t_now = simulationTime
+    t_last = GObject.data['last_iteration_simulation_time']
     t_delta = t_now - t_last
     if t_delta > 1.0 / exec_freq:
         time_passed = True
@@ -122,52 +115,90 @@ def callScript(deltaTime, simulationTime):
 
     if time_passed:
 
-        # execute new action
+        # check if we have signals
 
-        action, conditional_input, action_time = get_action(GObject.data['id'])
-        if action_time is not None and action_time > GObject.data['last_action_time']:
+        if GObject.data['signals'] is not None:
 
-            assert len(action) == len(GObject.data['signals']['input'])
-            for i, input_signal in enumerate(GObject.data['signals']['input']):
-                GDict[input_signal].setInputValue(action[i])
+            # query an action
 
-            assert len(conditional_input) == len(GObject.data['signals']['conditional'])
-            for i, input_signal in enumerate(GObject.data['signals']['conditional']):
-                GDict[input_signal].setInputValue(conditional_input[i])
+            action, conditional_input, action_submission_real_time, action_duration_simulation_time = get_action(GObject.data['id'])
 
-            GObject.data['last_action_time'] = action_time
+            # what if this is a new action
 
-        # report the result
+            if action_submission_real_time is not None and action_submission_real_time > GObject.data['last_action_real_time']:
 
-        state_values = [x.value() for x in GObject.data['state_objects']]
-        reward_values = [x.value() for x in GObject.data['reward_objects']]
-        conditional_values = [x.value() for x in GObject.data['conditional_objects']]
-        config_time = post_state_and_reward(GObject.data['id'], state_values, reward_values, conditional_values)
-        if config_time is None:
-            print('Looks like server is not running, or backend {0} is not registered!'.format(GObject.data['id']))
+                # save the action
+
+                GObject.data['current_action'] = action
+                GObject.data['current_conditional'] = conditional_input
+                GObject.data['last_action_real_time'] = action_submission_real_time
+                GObject.data['current_action_end_simulation_time'] = simulationTime + action_duration_simulation_time
+                GObject.data['in_action'] = True
+
+                # report the result
+
+                state_values = [x.value() for x in GObject.data['state_objects']]
+                reward_values = [x.value() for x in GObject.data['reward_objects']]
+                conditional_values = [x.value() for x in GObject.data['conditional_objects']]
+                post_state_and_reward(GObject.data['id'], state_values, reward_values, conditional_values, t_now)
+                GObject.data['last_state_sent_simulation_time'] = simulationTime
+
+            # check if the action is real and it still can be executed
+
+            if simulationTime <= GObject.data['current_action_end_simulation_time']:
+
+                if action is not None:
+
+                    # all good, execute the action
+
+                    assert len(GObject.data['current_action']) == len(GObject.data['signals']['input'])
+                    for i, input_signal in enumerate(GObject.data['signals']['input']):
+                        GDict[input_signal].setInputValue(GObject.data['current_action'][i])
+
+                    assert len(GObject.data['current_conditional']) == len(GObject.data['signals']['conditional'])
+                    for i, input_signal in enumerate(GObject.data['signals']['conditional']):
+                        GDict[input_signal].setInputValue(GObject.data['current_conditional'][i])
+
+            else:
+
+                # keep reporting the result
+
+                state_values = [x.value() for x in GObject.data['state_objects']]
+                reward_values = [x.value() for x in GObject.data['reward_objects']]
+                conditional_values = [x.value() for x in GObject.data['conditional_objects']]
+                post_state_and_reward(GObject.data['id'], state_values, reward_values, conditional_values, t_now)
+                GObject.data['last_state_sent_simulation_time'] = simulationTime
+
+        # get signals if they are still None
+
+        else:
+
+            signals, signals_time = get_signals(GObject.data['id'])
+            if signals != {}:
+                GObject.data['signals'] = signals
+
+                # save component names
+
+                GObject.data['state_objects'] = [
+                    GSolver.getParameter(input_signal, 'InputValue') for input_signal in GObject.data['signals']['input']
+                ] + [
+                    GSolver.getParameter(output_signal, 'value') for output_signal in GObject.data['signals']['output'] + GObject.data['signals']['reward']
+                ]
+                GObject.data['reward_objects'] = [
+                    GSolver.getParameter(output_signal, 'value') for output_signal in GObject.data['signals']['reward']
+                ]
+                GObject.data['conditional_objects'] = [
+                    GSolver.getParameter(item, 'InputValue') for item in GObject.data['signals']['conditional']
+                ]
+
+                # post the very first observation
+
+                state_values = [x.value() for x in GObject.data['state_objects']]
+                reward_values = [x.value() for x in GObject.data['reward_objects']]
+                conditional_values = [x.value() for x in GObject.data['conditional_objects']]
+                post_state_and_reward(GObject.data['id'], state_values, reward_values, conditional_values, 0)
+                GObject.data['last_state_sent_simulation_time'] = simulationTime
 
         # save the last iteration time
 
-        GObject.data['last_iteration_time'] = time()
-
-        # get signals if config time is updated
-
-        if config_time > GObject.data['last_config_time']:
-
-            signals = get_signals(GObject.data['id'])
-
-            GObject.data['signals'].update(signals)
-
-            GObject.data['state_objects'] = [
-                GSolver.getParameter(input_signal, 'InputValue') for input_signal in GObject.data['signals']['input']
-            ] + [
-                GSolver.getParameter(output_signal, 'value') for output_signal in GObject.data['signals']['output'] + GObject.data['signals']['reward']
-            ]
-
-            GObject.data['reward_objects'] = [
-                GSolver.getParameter(output_signal, 'value') for output_signal in GObject.data['signals']['reward']
-            ]
-
-            GObject.data['conditional_objects'] = [
-                GSolver.getParameter(item, 'InputValue') for item in GObject.data['signals']['conditional']
-            ]
+        GObject.data['last_iteration_simulation_time'] = simulationTime

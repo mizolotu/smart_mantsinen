@@ -14,6 +14,7 @@ if __name__ == '__main__':
     # delete checkpoints
 
     if args.all:
+        #clean_checkpoint_directory(args.checkpoints, exclude=['models/mevea/mantsinen/ppo/model_checkpoints/rl_model_0_steps.zip'])
         clean_checkpoint_directory(args.checkpoints, exclude=[])
     else:
         max_step_checkpoint = find_checkpoint_with_max_step(args.checkpoints)

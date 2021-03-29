@@ -1,0 +1,17 @@
+model_path = 'C:\\Users\\mevea\\MeveaModels\\Mantsinen\\Models\\Mantsinen300M\\300M_fixed.mvs'  # <- change this if needed
+server = 'http://127.0.0.1:5000'
+model_output = 'models/mevea/mantsinen/ppo'
+video_output = 'videos/mevea/mantsinen/ppo'
+trajectory_dir = 'data/trajectory_examples'
+signal_dir = 'data/signals'
+nenvs = 4  # <- change this if needed
+nsteps = 4096
+npretrain = 5000
+ntrain = 10000000000
+sleep_interval = 3
+use_inputs = True
+use_outputs = True
+action_scale = 100
+lookback = 4
+wp_dist = 1
+tstep = 0.01
