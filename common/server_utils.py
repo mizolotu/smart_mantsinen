@@ -30,7 +30,7 @@ def post_signals(url, id, signals):
         print(e)
     return result
 
-def get_state(url, id, last_state_time):
+def get_state(url, id, last_state_time, is_last_step=False, step_count=None):
     state = []
     reward = []
     conditional = []
@@ -39,11 +39,13 @@ def get_state(url, id, last_state_time):
     ready = False
     while not ready:
         try:
-            print(f'Env {id} in get_state')
             r = requests.get('{0}/get_state'.format(url), json={'id': id})
             data = r.json()
+            #print('1', 't_state_simulation' in data.keys(), data['t_state_simulation'] is not None, last_state_time)
             if 't_state_simulation' in data.keys() and data['t_state_simulation'] is not None:
-                if last_state_time is None or data['t_state_simulation'] >= last_state_time:
+                #print('2', last_state_time is None, data['t_state_simulation'] >= last_state_time if last_state_time is not None else False, is_last_step, step_count, id)
+                if last_state_time is None or data['t_state_simulation'] >= last_state_time or is_last_step:
+                    #print('3', 'state' in data.keys() and 'reward' in data.keys() and 't_state_real' in data.keys() and 'conditional' in data.keys())
                     if 'state' in data.keys() and 'reward' in data.keys() and 't_state_real' in data.keys() and 'conditional' in data.keys():
                         state = data['state']
                         reward = data['reward']
@@ -61,7 +63,6 @@ def post_action(url, id, action, conditional, next_simulation_time):
     ready = False
     while not ready:
         try:
-            print(f'Env {id} in post_action')
             r = requests.post('{0}/post_action'.format(url), json={'id': id, 'action': action, 'conditional': conditional, 't_action_simulation': next_simulation_time})
             data = r.json()
             if 't_action_real' in data.keys() and data['t_action_real'] is not None:

@@ -9,7 +9,7 @@ from baselines.ppo2.ppo2 import PPO2 as ppo
 from common.policies import MlpPolicy
 from common.mevea_vec_env import MeveaVecEnv
 from common.mevea_runner import MeveaRunner
-from common.model_utils import find_checkpoint_with_max_step
+from common.model_utils import find_checkpoint_with_latest_date
 from common.data_utils import prepare_trajectories
 from common.callbacks import CheckpointCallback
 from common import logger
@@ -24,7 +24,7 @@ if __name__ == '__main__':
     # process arguments
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--checkpoint', help='Checkpoint file.')  #, default='models/mevea/mantsinen/ppo/model_checkpoints/rl_model_0_steps.zip')
+    parser.add_argument('-c', '--checkpoint', help='Checkpoint file.')  # e.g. "models/mevea/mantsinen/ppo/model_checkpoints/rl_model_0_steps.zip"
     parser.add_argument('-g', '--goon', type=bool, help='Continue training?', default=True)
     args = parser.parse_args()
 
@@ -42,13 +42,36 @@ if __name__ == '__main__':
     # prepare training data
 
     trajectory_files = [osp.join(trajectory_dir, fpath) for fpath in os.listdir(trajectory_dir) if fpath.endswith('csv')]
-    bc_train, bc_val, waypoints = prepare_trajectories(signal_dir, trajectory_files, use_inputs=use_inputs, use_outputs=use_outputs, action_scale=action_scale, lookback=lookback, tstep=tstep)
+    bc_train, bc_val, waypoints = prepare_trajectories(
+        signal_dir,
+        trajectory_files,
+        use_inputs=use_inputs,
+        use_outputs=use_outputs,
+        action_scale=action_scale,
+        lookback=lookback,
+        tstep=tstep
+    )
 
     # create environments
 
     n = len(waypoints)
     wp_inds = np.random.choice(n, nenvs)
-    env_fns = [make_env(MantsinenBasic, model_path, signal_dir, server, waypoints[i], lookback, use_inputs, use_outputs, action_scale, tstep) for i in wp_inds]
+    env_fns = [
+        make_env(
+            MantsinenBasic,
+            model_path,
+            model_dir,
+            signal_dir,
+            server,
+            waypoints[i],
+            nsteps,
+            lookback,
+            use_inputs,
+            use_outputs,
+            action_scale,
+            tstep
+        ) for i in wp_inds
+    ]
     env = MeveaVecEnv(env_fns)
 
     try:
@@ -56,7 +79,7 @@ if __name__ == '__main__':
         # load model
 
         if args.checkpoint is None:
-            checkpoint_file = find_checkpoint_with_max_step('{0}/model_checkpoints/'.format(model_output))
+            checkpoint_file = find_checkpoint_with_latest_date('{0}/model_checkpoints/'.format(model_output))
         else:
             checkpoint_file = args.checkpoint
         model = ppo.load(checkpoint_file)

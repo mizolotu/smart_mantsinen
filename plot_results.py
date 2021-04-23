@@ -33,7 +33,7 @@ if __name__ == '__main__':
         names = [label]
         ylabel = label
 
-        traces, layout = generate_line_scatter(names, data, colors, xlabel, ylabel, xrange=[0, 4358144])
+        traces, layout = generate_line_scatter(names, data, colors, xlabel, ylabel, xrange=[0, 16154624])
 
         # save results
 

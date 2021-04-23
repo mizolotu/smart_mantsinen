@@ -1,5 +1,6 @@
 import numpy as np
-import gym, pyautogui, cv2
+import gym, pyautogui, cv2, os, shutil
+import os.path as osp
 
 from common.runners import AbstractEnvRunner, swap_and_flatten
 from common.solver_utils import get_solver_path, start_solver, stop_solver
@@ -24,15 +25,32 @@ class MeveaRunner(AbstractEnvRunner):
         self.gamma = gamma
         self.solver_path = get_solver_path()
         self.mvs = env.mvs
+        self.dir = env.dir
         self.server = env.server
         self.recording = False
         self.debug = debug
 
+        # copy model to different directories to deal with data.tmp bug
+
+        if len(self.mvs) == 1:
+            self.model_dirs = [self.mvs]
+        else:
+            self.model_dirs = []
+            for i, mvs in enumerate(self.mvs):
+                basename = []
+                for j in range(3):
+                    basename.append(osp.basename(mvs))
+                    mvs = osp.dirname(mvs)
+                env_i_dir = osp.join(self.dir[i], str(i))
+                if not osp.isdir(env_i_dir):
+                    shutil.copytree(mvs, env_i_dir)
+                self.model_dirs.append(osp.abspath(osp.join(env_i_dir, *basename[::-1])))
+
         # reset environments in debug mode
 
         if self.debug:
-            str = input('id:\n')
-            self.backend_ids = [int(item) for item in str.split(',')]
+            inp = input('id:\n')
+            self.backend_ids = [int(item) for item in inp.split(',')]
 
         # init data
 
@@ -44,9 +62,18 @@ class MeveaRunner(AbstractEnvRunner):
         self.mb_rewards = [[] for _ in range(self.n_envs)]
         self.scores = [[] for _ in range(self.n_envs)]
 
+    def _copy(self, src, dst, symlinks=False, ignore=None):
+        for item in os.listdir(src):
+            s = os.path.join(src, item)
+            d = os.path.join(dst, item)
+            if os.path.isdir(s):
+                shutil.copytree(s, d, symlinks, ignore)
+            else:
+                shutil.copy2(s, d)
+
     def _start(self, headless=True, sleep_interval=1):
         self.backend_procs = []
-        for mvs, server in zip(self.mvs, self.server):
+        for mvs, server in zip(self.model_dirs, self.server):
             proc = start_solver(self.solver_path, mvs, headless=headless)
             self.backend_procs.append(proc)
             while not is_backend_registered(server, proc.pid):
@@ -246,7 +273,7 @@ class MeveaRunner(AbstractEnvRunner):
 
             self.mb_rewards[env_idx].append(rewards)
 
-        print('Step time: {0}'.format((time() - tstart) / self.n_steps))
+        print(f'Step time in {self.backend_procs[env_idx].pid}: {(time() - tstart) / self.n_steps}')
 
         stop_solver(self.backend_procs[env_idx])
         delete_id(self.server[env_idx], self.backend_procs[env_idx].pid)
@@ -297,14 +324,13 @@ class MeveaRunner(AbstractEnvRunner):
 
         # run steps in different threads
 
-
-
         threads = []
         for env_idx in range(self.n_envs):
             th = Thread(target=self._run_one, args=(env_idx,))
             th.start()
             threads.append(th)
-        [th.join() for th in threads]
+        for th in threads:
+            th.join()
 
         # stop recording
 

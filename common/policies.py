@@ -62,7 +62,7 @@ def mlp_extractor(flat_observations, net_arch, act_fun):
         if isinstance(layer, int):  # Check that this is a shared layer
             layer_size = layer
             latent = act_fun(linear(latent, "shared_fc{}".format(idx), layer_size, init_scale=np.sqrt(2)))
-            latent = tf.compat.v1.layers.batch_normalization(latent)
+            #latent = tf.compat.v1.layers.batch_normalization(latent)
         else:
             assert isinstance(layer, dict), "Error: the net_arch list can only contain ints and dicts"
             if 'pi' in layer:
@@ -707,8 +707,12 @@ class MlpPolicy_(FeedForwardPolicy):
                                         feature_extraction="mlp", **_kwargs)
 
 class MlpPolicy(FeedForwardPolicy):
+    def __init__(self, sess, ob_space, ac_space, n_env, n_steps, n_batch, reuse=False, **_kwargs):
+        super(MlpPolicy, self).__init__(sess, ob_space, ac_space, n_env, n_steps, n_batch, reuse, net_arch=[256, 256], feature_extraction="mlp", **_kwargs)
+
+class MlpPolicy_256(FeedForwardPolicy):
     def __init__(self, *args, **kwargs):
-        super(MlpPolicy, self).__init__(*args, **kwargs, net_arch=[256, dict(vf=[256], pi=[256])], feature_extraction="mlp")
+        super(MlpPolicy_256, self).__init__(*args, **kwargs, net_arch=[256, dict(vf=[256], pi=[256])], feature_extraction="mlp")
 
 class MlpLstmPolicy(LstmPolicy):
     """

@@ -1,7 +1,7 @@
 import gym
 import numpy as np
 
-from time import sleep, time
+from time import sleep
 from common.data_utils import load_signals, parse_conditional_signals
 from common.server_utils import post_signals, get_state, post_action
 from collections import deque
@@ -10,14 +10,16 @@ class MantsinenBasic(gym.Env):
 
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, mvs, signal_dir, server_url, waypoints, lookback, use_inputs, use_outputs, scale, tstep):
+    def __init__(self, mvs, env_dir, signal_dir, server_url, waypoints, nsteps, lookback, use_inputs, use_outputs, scale, tstep):
 
         # init params
 
         self.mvs = mvs
+        self.dir = env_dir
         self.id = None
         self.server = server_url
         self.waypoints = waypoints
+        self.nsteps = nsteps
         self.lookback = lookback
         self.use_inputs = use_inputs
         self.use_outputs = use_outputs
@@ -165,7 +167,9 @@ class MantsinenBasic(gym.Env):
         pass
 
     def _get_state(self):
-        obs, reward_components, conditional_components, t_state_real, t_state_simulation = get_state(self.server, self.id, self.step_simulation_time)
+        obs, reward_components, conditional_components, t_state_real, t_state_simulation = get_state(
+            self.server, self.id, self.step_simulation_time, self.step_count == self.nsteps, self.step_count
+        )
         return obs, reward_components, t_state_simulation
 
     def _std_vector(self, vector, xmin, xmax, eps=1e-10):
@@ -231,7 +235,7 @@ class MantsinenBasic(gym.Env):
                 conditional.append(action[idx])
         post_action(self.server, self.id, action.tolist(), conditional, self.tstep)
 
-    def _calculate_reward(self, xyz):
+    def _calculate_reward(self, xyz, w_path=0.5, w_target=0.5):
         done = False
         dists_to_wps = np.linalg.norm(xyz - self.waypoints, axis=1)
         idx_sorted = np.argsort(dists_to_wps)
@@ -240,6 +244,6 @@ class MantsinenBasic(gym.Env):
         dist_to_nearest_wp_std = dist_to_nearest_wp / self.d_max
         dist_to_last = np.linalg.norm(xyz - self.waypoints[-1, :])
         dist_to_last_std = dist_to_last / self.d_max
-        score = - dist_to_nearest_wp_std - dist_to_last_std
+        score = - w_path * dist_to_nearest_wp_std - w_target * dist_to_last_std
         info = {'rc1': -dist_to_nearest_wp_std, 'rc2': -dist_to_last_std, 'rc3': 0}
         return score, done, info

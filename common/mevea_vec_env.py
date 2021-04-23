@@ -99,6 +99,7 @@ class MeveaVecEnv(VecEnv):
         VecEnv.__init__(self, len(env_fns), observation_space, action_space)
 
         self.mvs = self.get_attr('mvs')
+        self.dir = self.get_attr('dir')
         self.server = self.get_attr('server')
 
     def step_async(self, actions):

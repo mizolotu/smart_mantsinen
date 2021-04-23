@@ -1,4 +1,5 @@
-model_path = 'C:\\Users\\mevea\\MeveaModels\\Mantsinen\\Models\\Mantsinen300M\\300M_fixed.mvs'  # <- change this if needed
+model_dir = 'C:\\Users\\mevea\\MeveaModels'
+model_path = f'{model_dir}\\Mantsinen\\Models\\Mantsinen300M\\300M_fixed.mvs'  # <- change this if needed
 server = 'http://127.0.0.1:5000'
 model_output = 'models/mevea/mantsinen/ppo'
 video_output = 'videos/mevea/mantsinen/ppo'
