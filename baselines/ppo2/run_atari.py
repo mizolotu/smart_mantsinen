@@ -34,7 +34,7 @@ def train(env_id, num_timesteps, seed, policy,
 
 def main():
     """
-    Runs the test
+    Runs the gymtest
     """
     parser = atari_arg_parser()
     parser.add_argument('--policy', help='Policy architecture', choices=['cnn', 'lstm', 'lnlstm', 'mlp'], default='cnn')

@@ -706,13 +706,13 @@ class MlpPolicy_(FeedForwardPolicy):
         super(MlpPolicy_, self).__init__(sess, ob_space, ac_space, n_env, n_steps, n_batch, reuse,
                                         feature_extraction="mlp", **_kwargs)
 
-class MlpPolicy(FeedForwardPolicy):
+class MlpPolicy_shared(FeedForwardPolicy):
     def __init__(self, sess, ob_space, ac_space, n_env, n_steps, n_batch, reuse=False, **_kwargs):
-        super(MlpPolicy, self).__init__(sess, ob_space, ac_space, n_env, n_steps, n_batch, reuse, net_arch=[256, 256], feature_extraction="mlp", **_kwargs)
+        super(MlpPolicy_shared, self).__init__(sess, ob_space, ac_space, n_env, n_steps, n_batch, reuse, net_arch=[256, 256], feature_extraction="mlp", **_kwargs)
 
-class MlpPolicy_256(FeedForwardPolicy):
+class MlpPolicy(FeedForwardPolicy):
     def __init__(self, *args, **kwargs):
-        super(MlpPolicy_256, self).__init__(*args, **kwargs, net_arch=[256, dict(vf=[256], pi=[256])], feature_extraction="mlp")
+        super(MlpPolicy, self).__init__(*args, **kwargs, net_arch=[256, dict(vf=[256], pi=[256])], feature_extraction="mlp")
 
 class MlpLstmPolicy(LstmPolicy):
     """

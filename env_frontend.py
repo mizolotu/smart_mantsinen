@@ -49,7 +49,7 @@ class MantsinenBasic(gym.Env):
 
         # dimensions and standardization coefficients
 
-        npoints = 5  # number of waypoints participating in each observation calculation
+        npoints = 3  # number of waypoints participating in each observation calculation
         rew_dim = len(self.signals['reward'])
         obs_dim = lookback * rew_dim * npoints
         self.rew_min = np.array(mins['reward'])
@@ -205,9 +205,9 @@ class MantsinenBasic(gym.Env):
         from_rp_to_wp_last = self.waypoints[-1, :] - rp
         obs = np.hstack([
             self._std_vector(from_rp_to_wp_first.reshape(1, -1)[0], self.v_min, self.v_max),
-            self._std_vector(from_rp_to_wp_before_nearest.reshape(1, -1)[0], self.v_min, self.v_max),
+            #self._std_vector(from_rp_to_wp_before_nearest.reshape(1, -1)[0], self.v_min, self.v_max),
             self._std_vector(from_rp_to_wp_nearest.reshape(1, -1)[0], self.v_min, self.v_max),
-            self._std_vector(from_rp_to_wp_after_nearest.reshape(1, -1)[0], self.v_min, self.v_max),
+            #self._std_vector(from_rp_to_wp_after_nearest.reshape(1, -1)[0], self.v_min, self.v_max),
             self._std_vector(from_rp_to_wp_last.reshape(1, -1)[0], self.v_min, self.v_max)
         ])
         if self.use_inputs:

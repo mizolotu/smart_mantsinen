@@ -1000,7 +1000,7 @@ class OffPolicyRLModel(BaseRLModel):
         :return: (bool) Whether is using HER or not
         """
         # Avoid circular import
-        from stable_baselines.her.replay_buffer import HindsightExperienceReplayWrapper
+        from baselines.her.replay_buffer import HindsightExperienceReplayWrapper
         return isinstance(self.replay_buffer, HindsightExperienceReplayWrapper)
 
     def replay_buffer_add(self, obs_t, action, reward, obs_tp1, done, info):

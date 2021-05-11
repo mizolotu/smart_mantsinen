@@ -138,8 +138,10 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints=16, use_input
         waypoint_time_step = duration / (n_waypoints - 1)
         waypoint_times = np.arange(0, n_waypoints) * waypoint_time_step
         wpoints = np.zeros((n_waypoints, 3))
+        #wpoints = np.zeros((n, 3))
         for i in range(3):
             wpoints[:, i] = np.interp(waypoint_times, rew_t, rewards[:, i])
+            #wpoints[:, i] = rewards[:, i]
         waypoints.append(wpoints)
 
         # standardize data
@@ -197,9 +199,9 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints=16, use_input
             from_rp_to_last_wp_with_lookback = wp_last - rp_with_lookback
             traj = np.hstack([
                 (from_rp_to_first_wp_with_lookback.reshape(1, -1)[0] - v_min) / (v_max - v_min + eps),
-                (from_rp_to_before_nearest_wp_with_lookback.reshape(1, -1)[0] - v_min) / (v_max - v_min + eps),
+                #(from_rp_to_before_nearest_wp_with_lookback.reshape(1, -1)[0] - v_min) / (v_max - v_min + eps),
                 (from_rp_to_nearest_wp_with_lookback.reshape(1, -1)[0] - v_min) / (v_max - v_min + eps),
-                (from_rp_to_after_nearest_wp_with_lookback.reshape(1, -1)[0] - v_min) / (v_max - v_min + eps),
+                #(from_rp_to_after_nearest_wp_with_lookback.reshape(1, -1)[0] - v_min) / (v_max - v_min + eps),
                 (from_rp_to_last_wp_with_lookback.reshape(1, -1)[0] - v_min) / (v_max - v_min + eps)
             ])
 

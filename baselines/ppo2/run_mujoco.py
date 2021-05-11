@@ -38,7 +38,7 @@ def train(env_id, num_timesteps, seed):
 
 def main():
     """
-    Runs the test
+    Runs the gymtest
     """
     args = mujoco_arg_parser().parse_args()
     logger.configure()

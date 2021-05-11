@@ -10,6 +10,7 @@ from common.policies import ActorCriticPolicy, RecurrentActorCriticPolicy
 from common.schedules import get_schedule_fn
 from common.tf_util import total_episode_reward_logger, is_image, outer_scope_getter, make_session
 from common.math_util import safe_mean
+from collections import deque
 
 #L2_WEIGHT = .1
 L2_WEIGHT = 0.0
@@ -51,10 +52,10 @@ class PPO2(ActorCriticRLModel):
     :param n_cpu_tf_sess: (int) The number of threads for TensorFlow operations
         If None, the number of cpu of the current machine will be used.
     """
-    def __init__(self, policy, env, runner, gamma=0.99, n_steps=2048, ent_coef=0.0, learning_rate=1e-4, vf_coef=0.5,
-                 max_grad_norm=0.5, lam=0.95, nminibatches=8, noptepochs=8, cliprange=0.1, cliprange_vf=None,
+    def __init__(self, policy, env, runner, gamma=0.99, n_steps=4096, ent_coef=0.001, learning_rate=2.5e-4, vf_coef=0.5,
+                 max_grad_norm=0.5, lam=0.95, nminibatches=4, noptepochs=8, cliprange=0.2, cliprange_vf=None,
                  verbose=1, tensorboard_log=None, _init_setup_model=True, policy_kwargs=None,
-                 full_tensorboard_log=False, seed=None, n_cpu_tf_sess=None):
+                 full_tensorboard_log=False, seed=None, n_cpu_tf_sess=None, eval_env=None):
 
         self.debug = False
 
@@ -93,6 +94,9 @@ class PPO2(ActorCriticRLModel):
         self.summary = None
 
         self.runner_class = runner
+        self.eval_env = eval_env
+
+        self.eval_ep_info_buf = deque(maxlen=40)
 
         super().__init__(policy=policy, env=env, verbose=verbose, requires_vec_env=True,
                          _init_setup_model=_init_setup_model, policy_kwargs=policy_kwargs,
@@ -358,7 +362,8 @@ class PPO2(ActorCriticRLModel):
                     vars = tf.compat.v1.trainable_variables()
                     vars_vals = self.sess.run(vars)
                     for var, val in zip(vars, vars_vals):
-                        print('Var: {0}'.format(var))
+                        #print('Var: {0}'.format(var))
+                        pass
 
                 #vars = tf.compat.v1.trainable_variables()
                 #vars_vals = self.sess.run(vars)
@@ -367,8 +372,7 @@ class PPO2(ActorCriticRLModel):
 
                 self.summary = tf.compat.v1.summary.merge_all()
 
-    def _train_step(self, learning_rate, cliprange, obs, returns, masks, actions, values, neglogpacs, update,
-                    writer, states=None, cliprange_vf=None):
+    def _train_step(self, learning_rate, cliprange, obs, returns, masks, actions, values, neglogpacs, update, writer, states=None, cliprange_vf=None):
         """
         Training of PPO2 Algorithm
 2521
@@ -514,6 +518,12 @@ class PPO2(ActorCriticRLModel):
                                                 masks.reshape((self.n_envs, self.n_steps)),
                                                 writer, self.num_timesteps)
 
+                if self.eval_env is not None:
+                    rollout = self.runner._run()
+                    obs, returns, masks, actions, values, neglogpacs, states, eval_ep_infos, true_reward = rollout
+                    self.eval_ep_info_buf.extend(eval_ep_infos)
+                    logger.logkv('eval_ep_reward_mean', safe_mean([ep_info['r'] for ep_info in self.eval_ep_info_buf]))
+
                 if self.verbose >= 1 and (update % log_interval == 0 or update == 1):
                     explained_var = explained_variance(values, returns)
                     logger.logkv("serial_timesteps", update * self.n_steps)
@@ -523,9 +533,10 @@ class PPO2(ActorCriticRLModel):
                     logger.logkv("explained_variance", float(explained_var))
                     if len(self.ep_info_buf) > 0 and len(self.ep_info_buf[0]) > 0:
                         logger.logkv('ep_reward_mean', safe_mean([ep_info['r'] for ep_info in self.ep_info_buf]))
-                        logger.logkv('ep_reward_c1_mean', safe_mean([ep_info['rc1'] for ep_info in self.ep_info_buf]))
-                        logger.logkv('ep_reward_c2_mean', safe_mean([ep_info['rc2'] for ep_info in self.ep_info_buf]))
-                        logger.logkv('ep_reward_c3_mean', safe_mean([ep_info['rc3'] for ep_info in self.ep_info_buf]))
+                        if 'rc1' in self.ep_info_buf[0].keys():
+                            logger.logkv('ep_reward_c1_mean', safe_mean([ep_info['rc1'] for ep_info in self.ep_info_buf]))
+                            logger.logkv('ep_reward_c2_mean', safe_mean([ep_info['rc2'] for ep_info in self.ep_info_buf]))
+                            logger.logkv('ep_reward_c3_mean', safe_mean([ep_info['rc3'] for ep_info in self.ep_info_buf]))
                     logger.logkv('time_elapsed', t_start - t_first_start)
                     for (loss_val, loss_name) in zip(loss_vals, self.loss_names):
                         logger.logkv(loss_name, loss_val)

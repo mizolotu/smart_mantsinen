@@ -239,7 +239,7 @@ class EvalCallback(EventCallback):
     :param eval_env: (Union[gym.Env, VecEnv]) The environment used for initialization
     :param callback_on_new_best: (Optional[BaseCallback]) Callback to trigger
         when there is a new best model according to the `mean_reward`
-    :param n_eval_episodes: (int) The number of episodes to test the agent
+    :param n_eval_episodes: (int) The number of episodes to gymtest the agent
     :param eval_freq: (int) Evaluate the agent every eval_freq call of the callback.
     :param log_path: (str) Path to a folder where the evaluations (`evaluations.npz`)
         will be saved. It will be updated at each evaluation.

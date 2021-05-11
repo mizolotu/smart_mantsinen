@@ -14,7 +14,7 @@ from tensorflow.python import pywrap_tensorflow
 from tensorflow.core.util import event_pb2
 from tensorflow.python.util import compat
 
-from reinforcement_learning.common.misc_util import mpi_rank_or_zero
+from common.misc_util import mpi_rank_or_zero
 
 DEBUG = 10
 INFO = 20
@@ -662,7 +662,7 @@ def _demo():
     with ScopedConfigure(None, None):
         info("^^^ should see b = 33.3")
 
-    with ScopedConfigure("/tmp/test-logger/", ["json"]):
+    with ScopedConfigure("/tmp/gymtest-logger/", ["json"]):
         logkv("b", -2.5)
         dumpkvs()
 
@@ -671,7 +671,7 @@ def _demo():
     dumpkvs()
     warn("hey")
     error("oh")
-    logkvs({"test": 1})
+    logkvs({"gymtest": 1})
 
 
 # ================================================================

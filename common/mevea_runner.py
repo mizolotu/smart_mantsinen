@@ -33,7 +33,7 @@ class MeveaRunner(AbstractEnvRunner):
         # copy model to different directories to deal with data.tmp bug
 
         if len(self.mvs) == 1:
-            self.model_dirs = [self.mvs]
+            self.model_dirs = self.mvs
         else:
             self.model_dirs = []
             for i, mvs in enumerate(self.mvs):
@@ -348,12 +348,13 @@ class MeveaRunner(AbstractEnvRunner):
         mb_states = self.states
         self.dones = np.array(self.dones)
 
-        for scores_in_env in mb_scores:
+        infos = np.mean(np.array(mb_scores), axis=0)
+        for info in infos:
             maybe_ep_info = {
-                'r': np.mean(scores_in_env[:, 0]),
-                'rc1': np.mean(scores_in_env[:, 1]),
-                'rc2': np.mean(scores_in_env[:, 2]),
-                'rc3': np.mean(scores_in_env[:, 3])
+                'r': info[0],
+                'rc1': info[1],
+                'rc2': info[2],
+                'rc3': info[3]
             }
             ep_infos.append(maybe_ep_info)
 

@@ -27,7 +27,9 @@ if __name__ == '__main__':
         'models/mevea/mantsinen/ppo/model_checkpoints/rl_model_30015488_steps.zip',
         'models/mevea/mantsinen/ppo/model_checkpoints/rl_model_40009728_steps.zip',
         'models/mevea/mantsinen/ppo/model_checkpoints/rl_model_50003968_steps.zip',
-        'models/mevea/mantsinen/ppo/model_checkpoints/rl_model_59293696_steps.zip'
+        'models/mevea/mantsinen/ppo/model_checkpoints/rl_model_60002304_steps.zip',
+        'models/mevea/mantsinen/ppo/model_checkpoints/rl_model_70000640_steps.zip',
+        'models/mevea/mantsinen/ppo/model_checkpoints/rl_model_78594048_steps.zip',
     ])
     args = parser.parse_args()
 
@@ -47,7 +49,20 @@ if __name__ == '__main__':
 
     # create environment
 
-    env_fns = [make_env(MantsinenBasic, model_path, signal_dir, server, data, lookback, use_inputs, use_outputs, action_scale, tstep) for data in waypoints]
+    env_fns = [make_env(
+        MantsinenBasic,
+        model_path,
+        model_dir,
+        signal_dir,
+        server,
+        data,
+        nsteps,
+        lookback,
+        use_inputs,
+        use_outputs,
+        action_scale,
+        tstep
+    ) for data in waypoints]
     env = MeveaVecEnv(env_fns)
 
     # checkpoints
