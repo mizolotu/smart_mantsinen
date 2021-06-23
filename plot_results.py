@@ -5,6 +5,7 @@ import plotly.io as pio
 import plotly.graph_objs as go
 
 from common.plot_utils import generate_line_scatter, moving_average
+from config import *
 
 if __name__ == '__main__':
 
@@ -13,6 +14,8 @@ if __name__ == '__main__':
     parser = arp.ArgumentParser(description='Plot results')
     parser.add_argument('-i', '--input', help='Input directory', default='models/mevea/mantsinen/ppo')
     parser.add_argument('-o', '--output', help='Output directory', default='figures/mevea/mantsinen/ppo')
+    parser.add_argument('-s', '--steps', help='Steps', default=int(48e6))
+    parser.add_argument('-w', '--window', help='Moving average window', default=10)
     args = parser.parse_args()
 
     score_keys = ['ep_reward_mean', 'ep_reward_c1_mean', 'ep_reward_c2_mean']
@@ -25,15 +28,18 @@ if __name__ == '__main__':
     p = pandas.read_csv(fname, delimiter=',', dtype=float)
     x = p['total_timesteps'].values
     xlabel = 'Timesteps'
+    xlimit = args.steps
+    #xlimit = (args.steps // (nenvs * nsteps) - args.window + 1) * nsteps * nenvs
 
     for color, key, label, name in zip(some_colors, score_keys, score_labels, score_names):
-        y = moving_average(p[key].values.reshape(-1, 1), window=1)[:, 0]
+        y = moving_average(p[key].values.reshape(-1, 1), window=args.window)[:, 0]
+        #data = [[x[args.window-1:] - nenvs * nsteps * (args.window - 1), y[args.window-1:]]]
         data = [[x, y]]
         colors = [color]
         names = [label]
         ylabel = label
 
-        traces, layout = generate_line_scatter(names, data, colors, xlabel, ylabel, xrange=[0, 59179008])
+        traces, layout = generate_line_scatter(names, data, colors, xlabel, ylabel, xrange=[0, xlimit])
 
         # save results
 

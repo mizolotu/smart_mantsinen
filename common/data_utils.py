@@ -69,6 +69,17 @@ def is_moving(conditional_signals, conditional_values, t):
                 values_to_check.append(value)
     return np.any(np.array(values_to_check) > 0)
 
+def is_acting(signals, values, values_to_avoid):
+    nactions = len(signals['input'])
+    result = True
+    action = values[:nactions]
+    action = [int(item) for item in action]
+    for value_to_avoid in values_to_avoid:
+        if action == value_to_avoid:
+            result = False
+            break
+    return result
+
 def adjust_indexes(signals, identical_input_signals):
     signals_to_remove = []
     signals_to_remove_parents = []
@@ -112,6 +123,7 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints=16, use_input
     rew_min, rew_max = np.array(mins['reward']), np.array(maxs['reward'])
     v_min = np.hstack([rew_min - rew_max] * lookback)
     v_max = np.hstack([rew_max - rew_min] * lookback)
+    d_max = np.linalg.norm(rew_max - rew_min)
     act_min, act_max = np.array(mins['input']), np.array(maxs['input'])
     obs_input_min = np.array(mins['input'])
     obs_input_max = np.array(maxs['input'])
@@ -161,23 +173,17 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints=16, use_input
 
         wp_first = wpoints[0, :]
         wp_last = wpoints[-1, :]
-        for i in range(idx0, n):
+        for i in range(idx0, n - 1):
+
             dist_to_wps = np.linalg.norm(wpoints - rewards[i, :], axis=1)
             idx_sorted = np.argsort(dist_to_wps)
             wp_nearest_idx = idx_sorted[0]
             wp_nearest = wpoints[wp_nearest_idx, :]
 
-            if wp_nearest_idx > 0:
-                wp_before_nearest_idx = wp_nearest_idx - 1
-            else:
-                wp_before_nearest_idx = wp_nearest_idx
-            wp_before_nearest = wpoints[wp_before_nearest_idx, :]
-
-            if wp_nearest_idx < n_waypoints - 1:
-                wp_after_nearest_idx = wp_nearest_idx + 1
-            else:
-                wp_after_nearest_idx = wp_nearest_idx
-            wp_after_nearest = wpoints[wp_after_nearest_idx, :]
+            next_obs_dist_to_wps = np.linalg.norm(wpoints - rewards[i + 1, :], axis=1)
+            next_obs_idx_sorted = np.argsort(next_obs_dist_to_wps)
+            next_obs_wp_nearest_idx = next_obs_idx_sorted[0]
+            next_obs_wp_nearest = wpoints[next_obs_wp_nearest_idx, :]
 
             # creating obs
 
@@ -193,28 +199,62 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints=16, use_input
                 for k in range(outputs.shape[1]):
                     os_std_with_lookback[j, k] = np.interp(t, rew_t, os_std[:, k])
             from_rp_to_nearest_wp_with_lookback = wp_nearest - rp_with_lookback
-            from_rp_to_before_nearest_wp_with_lookback = wp_before_nearest - rp_with_lookback
-            from_rp_to_after_nearest_wp_with_lookback = wp_after_nearest - rp_with_lookback
             from_rp_to_first_wp_with_lookback = wp_first - rp_with_lookback
             from_rp_to_last_wp_with_lookback = wp_last - rp_with_lookback
             traj = np.hstack([
                 (from_rp_to_first_wp_with_lookback.reshape(1, -1)[0] - v_min) / (v_max - v_min + eps),
-                #(from_rp_to_before_nearest_wp_with_lookback.reshape(1, -1)[0] - v_min) / (v_max - v_min + eps),
                 (from_rp_to_nearest_wp_with_lookback.reshape(1, -1)[0] - v_min) / (v_max - v_min + eps),
-                #(from_rp_to_after_nearest_wp_with_lookback.reshape(1, -1)[0] - v_min) / (v_max - v_min + eps),
                 (from_rp_to_last_wp_with_lookback.reshape(1, -1)[0] - v_min) / (v_max - v_min + eps)
+            ])
+
+            # reward (only the second component)
+
+            reward = np.linalg.norm(wp_last - rewards[i, :])
+            reward = reward / d_max
+
+            # creating next obs
+
+            next_obs_rp_with_lookback = np.zeros((lookback, rewards.shape[1]))
+            next_obs_is_std_with_lookback = np.zeros((lookback, inputs.shape[1]))
+            next_obs_os_std_with_lookback = np.zeros((lookback, outputs.shape[1]))
+            for j in range(lookback):
+                t = rew_t[i] - j * tstep
+                for k in range(rewards.shape[1]):
+                    next_obs_rp_with_lookback[j, k] = np.interp(t, rew_t, rewards[:, k])
+                for k in range(inputs.shape[1]):
+                    next_obs_is_std_with_lookback[j, k] = np.interp(t, rew_t, is_std[:, k])
+                for k in range(outputs.shape[1]):
+                    next_obs_os_std_with_lookback[j, k] = np.interp(t, rew_t, os_std[:, k])
+            next_obs_from_rp_to_nearest_wp_with_lookback = next_obs_wp_nearest - next_obs_rp_with_lookback
+            next_obs_from_rp_to_first_wp_with_lookback = wp_first - next_obs_rp_with_lookback
+            next_obs_from_rp_to_last_wp_with_lookback = wp_last - next_obs_rp_with_lookback
+            next_obs = np.hstack([
+                (next_obs_from_rp_to_first_wp_with_lookback.reshape(1, -1)[0] - v_min) / (v_max - v_min + eps),
+                (next_obs_from_rp_to_nearest_wp_with_lookback.reshape(1, -1)[0] - v_min) / (v_max - v_min + eps),
+                (next_obs_from_rp_to_last_wp_with_lookback.reshape(1, -1)[0] - v_min) / (v_max - v_min + eps)
             ])
 
             # add signal values
 
             if use_inputs:
-                traj = np.append(traj, is_std_with_lookback.reshape(1, -1)[0])
+                traj = np.append(traj, np.mean(is_std_with_lookback, axis=0))
+                next_obs = np.append(next_obs, np.mean(next_obs_is_std_with_lookback, axis=0))
+
             if use_outputs:
-                traj = np.append(traj, os_std_with_lookback.reshape(1, -1)[0])
+                traj = np.append(traj, np.mean(os_std_with_lookback, axis=0))
+                next_obs = np.append(next_obs, np.mean(next_obs_os_std_with_lookback, axis=0))
 
             # add actions
 
             traj = np.append(traj, inps[i, :])
+
+            # add next obs
+
+            traj = np.append(traj, next_obs)
+
+            # add reward
+
+            traj = np.append(traj, reward)
 
             # add to the list
 

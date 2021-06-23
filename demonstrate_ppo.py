@@ -25,7 +25,7 @@ if __name__ == '__main__':
         'models/mevea/mantsinen/ppo/model_checkpoints/rl_model_10010624_steps.zip',
         'models/mevea/mantsinen/ppo/model_checkpoints/rl_model_20004864_steps.zip',
         'models/mevea/mantsinen/ppo/model_checkpoints/rl_model_30015488_steps.zip',
-        'models/mevea/mantsinen/ppo/model_checkpoints/rl_model_40009728_steps.zip',
+        'models/mevea/mantsinen/ppo/model_checkpoints/rl_model_39108608_steps.zip',
         'models/mevea/mantsinen/ppo/model_checkpoints/rl_model_50003968_steps.zip',
         'models/mevea/mantsinen/ppo/model_checkpoints/rl_model_60002304_steps.zip',
         'models/mevea/mantsinen/ppo/model_checkpoints/rl_model_70000640_steps.zip',
@@ -75,12 +75,16 @@ if __name__ == '__main__':
     # load model and run it in demo mode for each checkpoint
 
     for checkpoint in checkpoints:
-        model = ppo.load(checkpoint)
-        model.set_env(env)
-        print('Model has been successfully loaded from {0}'.format(checkpoint))
-        assert checkpoint.endswith('.zip')
-        cp_name = osp.basename(checkpoint)
-        output_fname = '{0}.mp4'.format(cp_name.split('.zip')[0])
-        output = osp.join(video_output, output_fname)
-        print('Recording to {0}'.format(output))
-        model.demo(output)
+        try:
+            model = ppo.load(checkpoint)
+            model.set_env(env)
+            print('Model has been successfully loaded from {0}'.format(checkpoint))
+            assert checkpoint.endswith('.zip')
+            cp_name = osp.basename(checkpoint)
+            output_fname = '{0}.mp4'.format(cp_name.split('.zip')[0])
+            output = osp.join(video_output, 'ppo', output_fname)
+            print('Recording to {0}'.format(output))
+            model.demo(output)
+        except Exception as e:
+            print(e)
+            break

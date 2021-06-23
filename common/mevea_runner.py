@@ -62,15 +62,6 @@ class MeveaRunner(AbstractEnvRunner):
         self.mb_rewards = [[] for _ in range(self.n_envs)]
         self.scores = [[] for _ in range(self.n_envs)]
 
-    def _copy(self, src, dst, symlinks=False, ignore=None):
-        for item in os.listdir(src):
-            s = os.path.join(src, item)
-            d = os.path.join(dst, item)
-            if os.path.isdir(s):
-                shutil.copytree(s, d, symlinks, ignore)
-            else:
-                shutil.copy2(s, d)
-
     def _start(self, headless=True, sleep_interval=1):
         self.backend_procs = []
         for mvs, server in zip(self.model_dirs, self.server):
@@ -79,7 +70,7 @@ class MeveaRunner(AbstractEnvRunner):
             while not is_backend_registered(server, proc.pid):
                 sleep(sleep_interval)
 
-    def record(self, video_file, sleep_interval=0.05, x=210, y=90, width=755, height=400):
+    def record(self, video_file, sleep_interval=0.25, x=210, y=90, width=755, height=400):
         screen_size = pyautogui.Size(width, height)
         fourcc = cv2.VideoWriter_fourcc(*"MP4V")
         out = cv2.VideoWriter(video_file, fourcc, 20.0, (screen_size))
@@ -117,7 +108,7 @@ class MeveaRunner(AbstractEnvRunner):
 
         self._start(headless=headless)
         self.env.set_attr('id', [proc.pid for proc in self.backend_procs])
-        self.obs[:] = self.env.reset()
+        #self.obs[:] = self.env.reset()
 
         if video_file is not None:
             self.recording = True
@@ -221,9 +212,24 @@ class MeveaRunner(AbstractEnvRunner):
 
         return mb_obs, mb_returns, mb_dones, mb_actions, mb_values, mb_neglogpacs, mb_states, ep_infos, true_reward
 
-    def _run_one(self, env_idx):
+    def _run_one(self, env_idx, sleep_interval=3):
+
+        # sleep to prevent pressure bug
+
+        sleep(sleep_interval)
+
+        # start timer
 
         tstart = time()
+
+        # reset env
+
+        if self.debug:
+            print(f'Reseting {env_idx}')
+        self.obs[env_idx:env_idx+1] = self.env.reset_one(env_idx)
+
+        if self.debug:
+            print(f'Solver {env_idx} has been reset')
 
         for _ in range(self.n_steps):
 
@@ -313,7 +319,7 @@ class MeveaRunner(AbstractEnvRunner):
 
         # reset environment's frontend
 
-        self.obs[:] = self.env.reset()
+        #self.obs[:] = self.env.reset()
 
         # start video recording
 

@@ -52,8 +52,8 @@ class PPO2(ActorCriticRLModel):
     :param n_cpu_tf_sess: (int) The number of threads for TensorFlow operations
         If None, the number of cpu of the current machine will be used.
     """
-    def __init__(self, policy, env, runner, gamma=0.99, n_steps=4096, ent_coef=0.001, learning_rate=2.5e-4, vf_coef=0.5,
-                 max_grad_norm=0.5, lam=0.95, nminibatches=4, noptepochs=8, cliprange=0.2, cliprange_vf=None,
+    def __init__(self, policy, env, runner, gamma=0.99, n_steps=4096, ent_coef=0.0, learning_rate=1e-4, vf_coef=0.5,
+                 max_grad_norm=0.5, lam=0.95, nminibatches=4, noptepochs=8, cliprange=0.1, cliprange_vf=None,
                  verbose=1, tensorboard_log=None, _init_setup_model=True, policy_kwargs=None,
                  full_tensorboard_log=False, seed=None, n_cpu_tf_sess=None, eval_env=None):
 
@@ -114,7 +114,7 @@ class PPO2(ActorCriticRLModel):
             return policy.obs_ph, self.action_ph, policy.policy
         return policy.obs_ph, self.action_ph, policy.deterministic_action # policy.action will train logstd, but is it ok? not sure...
 
-    def pretrain(self, data_tr, data_val, n_epochs=10, learning_rate=1e-4, adam_epsilon=1e-8, val_interval=None, l2_loss_weight=0.0, log_freq=100):
+    def pretrain_(self, data_tr, data_val, n_epochs=10, learning_rate=1e-4, adam_epsilon=1e-8, val_interval=None, l2_loss_weight=0.0, log_freq=100):
 
         """
         Pretrain a model using behavior cloning:

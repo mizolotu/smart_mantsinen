@@ -138,6 +138,11 @@ class MeveaVecEnv(VecEnv):
         obs = [remote.recv() for remote in self.remotes]
         return _flatten_obs(obs, self.observation_space)
 
+    def reset_one(self, env_idx):
+        self.remotes[env_idx].send(('reset', None))
+        obs = self.remotes[env_idx].recv()
+        return _flatten_obs([obs], self.observation_space)[0]
+
     def close(self):
         if self.closed:
             return

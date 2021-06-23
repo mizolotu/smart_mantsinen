@@ -14,6 +14,7 @@ from common.data_utils import prepare_trajectories
 from common.callbacks import CheckpointCallback
 from common import logger
 from config import *
+from itertools import cycle
 
 def make_env(env_class, *args):
     fn = lambda: env_class(*args)
@@ -25,13 +26,14 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--checkpoint', help='Checkpoint file.')  # e.g. "models/mevea/mantsinen/ppo/model_checkpoints/rl_model_5001216_steps.zip"
-    parser.add_argument('-g', '--goon', type=bool, help='Continue training?', default=True)
+    parser.add_argument('-s', '--save', type=bool, help='Save new training steps?', default=True)
     args = parser.parse_args()
 
     # configure logger
 
     format_strs = os.getenv('', 'stdout,log,csv').split(',')
-    logger.configure(os.path.abspath(model_output), format_strs)
+    log_dir = osp.join(os.path.abspath(model_output), 'ppo')
+    logger.configure(log_dir, format_strs)
 
     # check that server is running
 
@@ -52,10 +54,14 @@ if __name__ == '__main__':
         tstep=tstep
     )
 
+    #import pandas
+    #pandas.DataFrame(bc_train).to_csv('tmp.txt', index=None, header=None)
+
     # create environments
 
     n = len(waypoints)
-    wp_inds = np.random.choice(n, nenvs)
+    c = cycle(range(n))
+    wp_inds = [next(c) for _ in range(nenvs)]
     env_fns = [
         make_env(
             MantsinenBasic,
@@ -79,7 +85,7 @@ if __name__ == '__main__':
         # load model
 
         if args.checkpoint is None:
-            checkpoint_file = find_checkpoint_with_latest_date('{0}/model_checkpoints/'.format(model_output))
+            checkpoint_file = find_checkpoint_with_latest_date('{0}/model_checkpoints/'.format(log_dir))
         else:
             checkpoint_file = args.checkpoint
         model = ppo.load(checkpoint_file)
@@ -94,15 +100,15 @@ if __name__ == '__main__':
 
         # create and pretrain model
 
-        model = ppo(MlpPolicy, env, runner=MeveaRunner, n_steps=nsteps, verbose=1)
-        model.pretrain(bc_train, bc_val, n_epochs=npretrain, log_freq=npretrain)
-        model.save('{0}/model_checkpoints/rl_model_0_steps.zip'.format(model_output))
+        model = ppo(MlpPolicy, env, nminibatches=nsteps // batch_size, runner=MeveaRunner, n_steps=nsteps, verbose=1)
+        model.pretrain(np.vstack([bc_train, bc_val]), bc_val, batch_size=batch_size, n_epochs=npretrain, log_freq=npretrain, learning_rate=1e-4)
+        if not osp.isdir(f'{log_dir}/model_checkpoints/'):
+            os.mkdir(f'{log_dir}/model_checkpoints/')
+        model.save(f'{log_dir}/model_checkpoints/rl_model_0_steps.zip')
 
-    finally:
+    # continue training
 
-        # continue training
-
-        callbacks = []
-        if args.goon:
-            callbacks.append(CheckpointCallback(save_freq=nsteps, save_path='{0}/model_checkpoints/'.format(model_output)))
-        model.learn(total_timesteps=ntrain, callback=callbacks)
+    callbacks = []
+    if args.save:
+        callbacks.append(CheckpointCallback(save_freq=nsteps*nenvs, save_path='{0}/model_checkpoints/'.format(log_dir)))
+    model.learn(total_timesteps=ntrain, callback=callbacks)

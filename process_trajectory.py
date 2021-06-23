@@ -1,9 +1,11 @@
 import argparse, os
 import os.path as osp
+import numpy as np
 
-from common.data_utils import load_signals, save_trajectory, parse_conditional_signals, is_moving
+from common.data_utils import load_signals, save_trajectory, parse_conditional_signals, is_moving, is_acting
 from common.solver_utils import get_solver_path, start_solver, stop_solver
 from common.server_utils import is_server_running, is_backend_registered, post_signals, post_action, get_state
+from config import default_actions
 
 from time import sleep
 
@@ -75,24 +77,28 @@ if __name__ == '__main__':
 
     states = []
     rewards = []
+    is_acting_list = []
     conditional_values = []
     timestamps = []
-    moving = False
+    moving_and_acting = False
     last_t_state = None
     move_t_start = None
-    while not moving:
+
+    while not moving_and_acting:
         post_action(args.server, backend_id, None, conditional_values, next_simulation_time=0)
         state, reward, conditional_values, t_state_real, t_state_simulation = get_state(args.server, backend_id, last_state_time=0)
-        moving = is_moving(conditional_signals, conditional_values, t_state_simulation)
-        if moving:
+        moving_and_acting = is_moving(conditional_signals, conditional_values, t_state_simulation) and is_acting(signals, state, default_actions)
+        if moving_and_acting:
             timestamps.append(t_state_simulation)
             states.append(state)
             rewards.append(reward)
+            is_acting_list.append(True)
 
     print('Recording the trajectory...')
 
     # record the trajectory and wait for the moving to stop
 
+    moving = True
     while moving:
         post_action(args.server, backend_id, None, conditional_values, next_simulation_time=0)
         state, reward, conditional_values, t_state_real, t_state_simulation = get_state(args.server, backend_id, last_state_time=0)
@@ -102,10 +108,16 @@ if __name__ == '__main__':
                 states.append(state)
                 rewards.append(reward)
                 timestamps.append(t_state_simulation)
+                is_acting_list.append(is_acting(signals, state, default_actions))
+
+    # last acting
+
+    is_acting_array = np.array(is_acting_list)
+    idx_last = np.where(is_acting_array == True)[0][-1]
 
     # save trajectory
 
-    save_trajectory(signals, timestamps, rewards, states, output)
+    save_trajectory(signals, timestamps[:idx_last], rewards[:idx_last], states[:idx_last], output[:idx_last])
     print('Trajectory has been recorded and saved in {0}!'.format(output))
 
     # stop the solver

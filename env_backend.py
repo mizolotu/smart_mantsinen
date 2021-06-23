@@ -5,7 +5,7 @@ from time import sleep
 
 attempts_max = 10  # maximum number of attempts to register
 exec_freq = 1000  # Hz
-sleep_interval = 1  # seconds
+sleep_interval = 3  # seconds
 
 # http parameters
 
@@ -121,6 +121,7 @@ def callScript(deltaTime, simulationTime):
 
             # query an action
 
+            print('querying new action')
             action, conditional_input, action_submission_real_time, action_duration_simulation_time = get_action(GObject.data['id'])
 
             # what if this is a new action
@@ -148,6 +149,8 @@ def callScript(deltaTime, simulationTime):
             if simulationTime <= GObject.data['current_action_end_simulation_time']:
 
                 if action is not None:
+
+                    print(f"executing action {GObject.data['current_action']} for {GObject.data['current_action_end_simulation_time'] - simulationTime} seconds")
 
                     # all good, execute the action
 
@@ -196,7 +199,7 @@ def callScript(deltaTime, simulationTime):
                 state_values = [x.value() for x in GObject.data['state_objects']]
                 reward_values = [x.value() for x in GObject.data['reward_objects']]
                 conditional_values = [x.value() for x in GObject.data['conditional_objects']]
-                post_state_and_reward(GObject.data['id'], state_values, reward_values, conditional_values, 0)
+                post_state_and_reward(GObject.data['id'], state_values, reward_values, conditional_values, t_now)
                 GObject.data['last_state_sent_simulation_time'] = simulationTime
 
         # save the last iteration time

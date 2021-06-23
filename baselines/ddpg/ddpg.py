@@ -20,7 +20,11 @@ from common.buffers import ReplayBuffer
 from common.math_util import unscale_action, scale_action
 from common.mpi_running_mean_std import RunningMeanStd
 from baselines.ddpg.policies import DDPGPolicy
+from common.noise import NormalActionNoise, OrnsteinUhlenbeckActionNoise, AdaptiveParamNoiseSpec
 
+from time import sleep, time
+from common.solver_utils import get_solver_path, start_solver, stop_solver
+from common.server_utils import is_backend_registered, delete_id
 
 def normalize(tensor, stats):
     """
@@ -198,8 +202,8 @@ class DDPG(OffPolicyRLModel):
         If None, the number of cpu of the current machine will be used.
     """
     def __init__(self, policy, env, gamma=0.99, memory_policy=None, eval_env=None, nb_train_steps=200,
-                 nb_rollout_steps=4096, nb_eval_steps=4096, param_noise=None, action_noise=None,
-                 normalize_observations=True, tau=0.001, batch_size=4096, param_noise_adaption_interval=50,
+                 n_steps=4096, nb_eval_steps=4096, param_noise=None, action_noise=None,
+                 normalize_observations=False, tau=0.001, batch_size=4096, param_noise_adaption_interval=50,
                  normalize_returns=False, enable_popart=False, observation_range=(-5., 5.), critic_l2_reg=0.,
                  return_range=(-np.inf, np.inf), actor_lr=1e-4, critic_lr=1e-3, clip_norm=None, reward_scale=1.,
                  render=False, render_eval=False, memory_limit=None, buffer_size=100000, random_exploration=0.0,
@@ -227,6 +231,14 @@ class DDPG(OffPolicyRLModel):
 
         self.normalize_observations = normalize_observations
         self.normalize_returns = normalize_returns
+
+        if env is not None:
+            n_actions = env.action_space.shape[-1]
+            #action_noise = OrnsteinUhlenbeckActionNoise(mean=np.zeros(n_actions), sigma=float(0.01) * np.ones(n_actions))
+
+        #param_noise = AdaptiveParamNoiseSpec(initial_stddev=0.01, desired_action_stddev=0.01)
+        self.param_noise = param_noise
+
         self.action_noise = action_noise
         self.param_noise = param_noise
         self.return_range = return_range
@@ -236,7 +248,7 @@ class DDPG(OffPolicyRLModel):
         self.clip_norm = clip_norm
         self.enable_popart = enable_popart
         self.reward_scale = reward_scale
-        self.batch_size = batch_size
+        self.batch_size = n_steps
         self.critic_l2_reg = critic_l2_reg
         self.eval_env = eval_env
         self.render = render
@@ -244,7 +256,7 @@ class DDPG(OffPolicyRLModel):
         self.nb_eval_steps = nb_eval_steps
         self.param_noise_adaption_interval = param_noise_adaption_interval
         self.nb_train_steps = nb_train_steps
-        self.nb_rollout_steps = nb_rollout_steps
+        self.nb_rollout_steps = n_steps
         self.memory_limit = memory_limit
         self.buffer_size = buffer_size
         self.tensorboard_log = tensorboard_log
@@ -313,43 +325,18 @@ class DDPG(OffPolicyRLModel):
         if _init_setup_model:
             self.setup_model()
 
+        self.solver_path = get_solver_path()
+
     def _get_pretrain_placeholders(self):
         policy = self.policy_tf
         # Rescale
         deterministic_action = unscale_action(self.action_space, self.actor_tf)
         return policy.obs_ph, self.actions, deterministic_action
 
-    def pretrain(self, data_tr, data_val, batch_size=4096, n_epochs=10, learning_rate=1e-3, val_interval=None, l2_loss_weight=0.0, log_freq=100):
-
-        continuous_actions = isinstance(self.action_space, gym.spaces.Box)
-        discrete_actions = isinstance(self.action_space, gym.spaces.Discrete)
-
-        assert discrete_actions or continuous_actions, 'Only Discrete and Box action spaces are supported'
-
-        with self.graph.as_default():
-            with tf.compat.v1.variable_scope('pretrain'):
-                if continuous_actions:
-                    obs_ph, actions_ph, deterministic_actions_ph = self._get_pretrain_placeholders()
-                    policy_loss = tf.reduce_mean(input_tensor=tf.square(actions_ph - deterministic_actions_ph))
-                    weight_params = [v for v in self.params if '/b' not in v.name]
-                    l2_loss = tf.reduce_sum([tf.nn.l2_loss(v) for v in weight_params])
-                    loss = policy_loss + l2_loss_weight * l2_loss
-                else:
-                    obs_ph, actions_ph, actions_logits_ph = self._get_pretrain_placeholders()
-                    actions_ph = tf.expand_dims(actions_ph, axis=1)
-                    one_hot_actions = tf.one_hot(actions_ph, self.action_space.n)
-                    loss = tf.nn.softmax_cross_entropy_with_logits(
-                        logits=actions_logits_ph,
-                        labels=tf.stop_gradient(one_hot_actions)
-                    )
-                    loss = tf.reduce_mean(input_tensor=loss)
-                optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=learning_rate)
-                optim_op = optimizer.minimize(loss, var_list=self.params)
-
-            self.sess.run(tf.compat.v1.global_variables_initializer())
+    def full_pretrain(self, data_tr, batch_size=256, n_epochs=10):
 
         if self.verbose > 0:
-            print("Pretraining with behavior cloning for {0} epochs on {1} samples of size {2}:".format(n_epochs, data_tr.shape[0], data_tr.shape[1]))
+            print("Pretraining both actor and critic with expert data for {0} epochs on {1} samples of size {2}:".format(n_epochs, data_tr.shape[0], data_tr.shape[1]))
 
         obs_dim = self.observation_space.shape[0]
         act_dim = self.action_space.shape[0]
@@ -357,70 +344,37 @@ class DDPG(OffPolicyRLModel):
         ntrain = data_tr.shape[0]
         nbatches = ntrain // batch_size
 
-        for epoch_idx in range(int(n_epochs)):
+        with self.sess.as_default(), self.graph.as_default():
 
-            old_vals = []
-            with self.graph.as_default():
-                vars = tf.compat.v1.trainable_variables()
-                vars_vals = self.sess.run(vars)
-                for var, val in zip(vars, vars_vals):
-                    old_vals.append(val)
+            for epoch_idx in range(int(n_epochs)):
 
-            train_loss = 0.0
+                actor_loss = 0
+                critic_loss = 0
 
-            # training
+                for i in range(nbatches):
+                    idx = np.random.choice(ntrain, batch_size)
+                    expert_obs, expert_actions = data_tr[idx, :obs_dim], data_tr[idx, obs_dim:obs_dim + act_dim]
+                    next_expert_obs = data_tr[idx, obs_dim + act_dim:obs_dim + act_dim + obs_dim]
+                    expert_reward = data_tr[idx, -1]
+                    for i in range(len(idx)):
+                        self.replay_buffer_add(expert_obs[i, :], expert_actions[i, :], expert_reward[i], next_expert_obs[i, :], False, {})
 
-            for i in range(nbatches):
-                idx = np.random.choice(ntrain, batch_size)
-                expert_obs, expert_actions = data_tr[idx, :obs_dim], data_tr[idx, obs_dim:obs_dim+act_dim]
-                next_expert_obs = data_tr[idx, obs_dim+act_dim:obs_dim+act_dim+obs_dim]
-                reward = data_tr[idx, -1]
+                    if not self.replay_buffer.can_sample(self.batch_size):
+                        continue
 
-                for i in range(len(idx)):
-                    #print(expert_obs[i, :], expert_actions[i, :], reward[i] * self.reward_scale, next_expert_obs[i, :])
-                    self.replay_buffer_add(expert_obs[i, :], expert_actions[i, :], reward[i] * self.reward_scale, next_expert_obs[i, :], False, {})
-
-                feed_dict = {
-                    obs_ph: expert_obs,
-                    actions_ph: expert_actions
-                }
-                #train_loss_, _ = self.sess.run([loss, optim_op], feed_dict)
-                #train_loss += train_loss_
-            train_loss /= nbatches
-
-            with self.sess.as_default(), self.graph.as_default():
-
-                for t_train in range(self.nb_train_steps):
-
-                    if not self.replay_buffer.can_sample(batch_size):
-                        break
-
-                    if len(self.replay_buffer) >= batch_size and t_train % self.param_noise_adaption_interval == 0:
+                    if len(self.replay_buffer) >= self.batch_size and i % self.param_noise_adaption_interval == 0:
                         _ = self._adapt_param_noise()
-                    step = (int(t_train * (batch_size / self.nb_train_steps)) + self.num_timesteps - batch_size)
-                    writer = None
-                    _, _ = self._train_step(step, writer, log=t_train == 0)
+
+                    step = (int(i * (self.nb_rollout_steps / self.nb_train_steps)) + self.num_timesteps - self.nb_rollout_steps)
+
+                    cr_loss, ac_loss = self._train_step(step, None, log=i == 0)
+                    actor_loss += ac_loss
+                    critic_loss += cr_loss
                     self._update_target_net()
 
-            if self.verbose > 0 and (n_epochs <= log_freq or ((epoch_idx + 1) % (n_epochs // log_freq)) == 0):
-                print('Epoch {0}/{1}: training loss = {2}'.format(epoch_idx + 1, n_epochs, train_loss))
-
-            with self.graph.as_default():
-                vars = tf.compat.v1.trainable_variables()
-                vars_vals = self.sess.run(vars)
-                for var, old_val, val in zip(vars, old_vals, vars_vals):
-                    #print('Var: {0}, difference: {1}'.format(var, np.linalg.norm(val - old_val)))
-                    pass
-
-            del expert_obs, expert_actions
-
-        if self.verbose > 0:
-            print("Pretraining done!")
-
-        print(len(self.replay_buffer))
+                print(f'Epoch {epoch_idx + 1}/{n_epochs}: critic loss = {critic_loss / nbatches}, actor loss = {actor_loss / nbatches}')
 
         return self
-
 
     def setup_model(self):
         with SetVerbosity(self.verbose):
@@ -912,10 +866,17 @@ class DDPG(OffPolicyRLModel):
                 self.param_noise_stddev: self.param_noise.current_stddev,
             })
 
-    def learn(self, total_timesteps, callback=None, log_interval=4, tb_log_name="DDPG",
-              reset_num_timesteps=True, replay_wrapper=None):
+    def _start(self, headless=False, sleep_interval=1):
+        proc = start_solver(self.solver_path, self.mvs, headless=headless)
+        self.backend_proc = proc
+        while not is_backend_registered(self.server, proc.pid):
+            sleep(sleep_interval)
 
-        print(len(self.replay_buffer))
+    def learn(self, total_timesteps, callback=None, log_interval=4, tb_log_name="DDPG", reset_num_timesteps=True, replay_wrapper=None):
+
+        self.mvs = self.env.mvs[0]
+        self.dir = self.env.dir[0]
+        self.server = self.env.server[0]
 
         new_tb_log = self._init_num_timesteps(reset_num_timesteps)
         callback = self._init_callback(callback)
@@ -941,9 +902,10 @@ class DDPG(OffPolicyRLModel):
             episode_successes = []
 
             with self.sess.as_default(), self.graph.as_default():
+
                 # Prepare everything.
                 self._reset()
-                obs = self.env.reset()
+                #obs = self.env.reset()
 
                 # Retrieve unnormalized observation for saving into the buffer
                 if self._vec_normalize_env is not None:
@@ -957,7 +919,7 @@ class DDPG(OffPolicyRLModel):
                 step = 0
                 total_steps = 0
 
-                start_time = time.time()
+                start_time = time()
 
                 epoch_episode_rewards = []
                 epoch_episode_steps = []
@@ -979,7 +941,11 @@ class DDPG(OffPolicyRLModel):
 
                         # Perform rollouts.
 
+                        self._start()
+                        self.env.set_attr('id', [self.backend_proc.pid])
+                        obs = self.env.reset()
                         rewards = []
+
                         for _ in range(self.nb_rollout_steps):
 
                             if total_steps >= total_timesteps:
@@ -1068,6 +1034,9 @@ class DDPG(OffPolicyRLModel):
                                 #if not isinstance(self.env, VecEnv):
                                 obs = self.env.reset()
 
+                        stop_solver(self.backend_proc)
+                        delete_id(self.server, self.backend_proc.pid)
+
                         self.ep_info_buf.append({'r': np.mean(rewards)})
 
                         callback.on_rollout_end()
@@ -1078,11 +1047,14 @@ class DDPG(OffPolicyRLModel):
                         epoch_critic_losses = []
                         epoch_adaptive_distances = []
                         for t_train in range(self.nb_train_steps):
+
                             # Not enough samples in the replay buffer
+
                             if not self.replay_buffer.can_sample(self.batch_size):
                                 break
 
                             # Adapt param noise, if necessary.
+
                             if len(self.replay_buffer) >= self.batch_size and t_train % self.param_noise_adaption_interval == 0:
                                 distance = self._adapt_param_noise()
                                 epoch_adaptive_distances.append(distance)
@@ -1098,6 +1070,7 @@ class DDPG(OffPolicyRLModel):
                             self._update_target_net()
 
                         # Evaluate.
+
                         eval_episode_rewards = []
                         eval_qs = []
                         if self.eval_env is not None:
@@ -1137,7 +1110,7 @@ class DDPG(OffPolicyRLModel):
 
                     # Log stats.
                     # XXX shouldn't call np.mean on variable length lists
-                    duration = time.time() - start_time
+                    duration = time() - start_time
                     stats = self._get_stats()
                     combined_stats = stats.copy()
 
