@@ -30,7 +30,7 @@ python -m pip install numpy requests
 
 6. Open file ```config.py```, and change path to Mantsinen model. Change other settings if needed.
 
-## Preprocessing
+## Preprocessing (Optional)
 
 1. From SmartMantsinen directory start the server script: 
 ```
@@ -55,8 +55,9 @@ python env_server.py
 2. Start or continue training the PPO agent:
 
 ```bash
-python train_baseline.py -c <path_to_checkpoint_file>
+python train_ppo.py
 ```
+<img src="https://drive.google.com/file/d/1IhupYLXCMP0V4w7jQmTTys2JTWZhdiQT/view?usp=sharing"/>
 
 ## Postprocessing
 
@@ -66,27 +67,16 @@ python plot_results.py
 ```
 2. Demonstrate the policy trained:
 ```bash
-python demonstrate_baseline.py
+python demonstrate_ppo.py -c <first, last or best>
 ```
-
-3. Model checkpoints are created via default callback which runs every few steps, unnecessary checkpoints can be removed as follows (only the checkpoint with the latest date and the checkpoint with tha maximum training steps will remain):
-
-```bash
-python clean_checkpoints.py -c <path_to_checkpoint_directory> 
-```
+The first checkpoint corresponds to the model pretrained with supervised learning.
 
 ## Results
 
-<img src="figures/mevea/mantsinen/ppo/path_score.png" width="200"/> <img src="figures/mevea/mantsinen/ppo/target_score.png" width="200"/> <img src="figures/mevea/mantsinen/ppo/total_score.png" width="200"/>
+<img src="figures/mevea/mantsinen/ppo/policy_loss.png" width="200"/> <img src="figures/mevea/mantsinen/ppo/value_loss.png" width="200"/> <img src="figures/mevea/mantsinen/ppo/total_score.png" width="200"/>
 
 Model evaluation:
-- after 0 steps (behavioral clonning): https://drive.google.com/file/d/1ApChpqPnCdD1gv98iIlTxZ9vu00eehPP/view?usp=sharing
-- after 10M steps: https://drive.google.com/file/d/1YFqbrUANQPN1o437EsJBH3Q8nir4IvRL/view?usp=sharing
-- after 20M steps: https://drive.google.com/file/d/1OrJwJ3Q-uJLsvlTzfPj1l3ttWdvkmRXJ/view?usp=sharing
-- after 30M steps: https://drive.google.com/file/d/1B1QjsVcsRmkuhcauAZ12ISj6zP6YDO_k/view?usp=sharing
-- after 40M steps: https://drive.google.com/file/d/1uUpJS35FlJjA68r1HwOVOuaR7Zdky3i7/view?usp=sharing
-- after 50M steps: https://drive.google.com/file/d/1shE-FWRYEHjva0uswLGYdFPAHOFlOkHv/view?usp=sharing
-- after 60M steps: https://drive.google.com/file/d/1dqPUNNsyTwmSd-jxcjujaCaP_KMqdU09/view?usp=sharing
-
+- supervised (behavioral clonning): https://drive.google.com/file/d/12U97PRpldCd-K9r5iUCOpqb3AXWIF9ii/view?usp=sharing
+- supervised + reinforcement (transfer learning): https://drive.google.com/file/d/1Nu2yP3NV7r-1gkglhPLMniJfUfGvj8oq/view?usp=sharing
 
 
