@@ -24,6 +24,7 @@ class PPOPolicy(BasePolicy):
                  ortho_init=True, log_std_init=0.0, shared_trainable=True, pi_trainable=True, vf_trainable=True):
 
         super(PPOPolicy, self).__init__(observation_space, action_space)
+
         self.obs_dim = np.prod(self.observation_space.shape)
         self.shared_trainable = shared_trainable
         self.vf_trainable = vf_trainable
@@ -49,6 +50,7 @@ class PPOPolicy(BasePolicy):
 
         # In the future, feature_extractor will be replaced with a CNN
         #self.input_layer = Sequential(layers.Flatten(input_shape=(self.obs_dim,), dtype=tf.float32))
+
         self.input_layer = Sequential([
             layers.Input(shape=self.observation_space.shape, dtype=tf.float32)
         ])

@@ -1,0 +1,70 @@
+{
+    "gamma": 0.99,
+    "n_steps": 4096,
+    "vf_coef": 0.5,
+    "ent_coef": 0.0,
+    "max_grad_norm": 0.5,
+    "learning_rate": {
+        ":type:": "<class 'function'>",
+        ":serialized:": "gAWVywIAAAAAAACMF2Nsb3VkcGlja2xlLmNsb3VkcGlja2xllIwNX2J1aWx0aW5fdHlwZZSTlIwKTGFtYmRhVHlwZZSFlFKUKGgCjAhDb2RlVHlwZZSFlFKUKEsBSwBLAEsBSwFLE0MEiABTAJROhZQpjAFflIWUjE5DOlxVc2Vyc1xtZXZlYVxQeWNoYXJtUHJvamVjdHNcU21hcnRNYW50c2luZW5cc3RhYmxlX2Jhc2VsaW5lc1xjb21tb25cdXRpbHMucHmUjARmdW5jlEtAQwIAAZSMA3ZhbJSFlCl0lFKUfZQojAtfX3BhY2thZ2VfX5SMF3N0YWJsZV9iYXNlbGluZXMuY29tbW9ulIwIX19uYW1lX1+UjB1zdGFibGVfYmFzZWxpbmVzLmNvbW1vbi51dGlsc5SMCF9fZmlsZV9flIxOQzpcVXNlcnNcbWV2ZWFcUHljaGFybVByb2plY3RzXFNtYXJ0TWFudHNpbmVuXHN0YWJsZV9iYXNlbGluZXNcY29tbW9uXHV0aWxzLnB5lHVOTmgAjBBfbWFrZV9lbXB0eV9jZWxslJOUKVKUhZR0lFKUjBxjbG91ZHBpY2tsZS5jbG91ZHBpY2tsZV9mYXN0lIwSX2Z1bmN0aW9uX3NldHN0YXRllJOUaCB9lH2UKGgXaA6MDF9fcXVhbG5hbWVfX5SMGWNvbnN0YW50X2ZuLjxsb2NhbHM+LmZ1bmOUjA9fX2Fubm90YXRpb25zX1+UfZSMDl9fa3dkZWZhdWx0c19flE6MDF9fZGVmYXVsdHNfX5ROjApfX21vZHVsZV9flGgYjAdfX2RvY19flE6MC19fY2xvc3VyZV9flGgAjApfbWFrZV9jZWxslJOURz8aNuLrHEMthZRSlIWUjBdfY2xvdWRwaWNrbGVfc3VibW9kdWxlc5RdlIwLX19nbG9iYWxzX1+UfZR1hpSGUjAu"
+    },
+    "gae_lambda": 0.95,
+    "batch_size": 512,
+    "n_epochs": 16,
+    "clip_range": {
+        ":type:": "<class 'function'>",
+        ":serialized:": "gAWVywIAAAAAAACMF2Nsb3VkcGlja2xlLmNsb3VkcGlja2xllIwNX2J1aWx0aW5fdHlwZZSTlIwKTGFtYmRhVHlwZZSFlFKUKGgCjAhDb2RlVHlwZZSFlFKUKEsBSwBLAEsBSwFLE0MEiABTAJROhZQpjAFflIWUjE5DOlxVc2Vyc1xtZXZlYVxQeWNoYXJtUHJvamVjdHNcU21hcnRNYW50c2luZW5cc3RhYmxlX2Jhc2VsaW5lc1xjb21tb25cdXRpbHMucHmUjARmdW5jlEtAQwIAAZSMA3ZhbJSFlCl0lFKUfZQojAtfX3BhY2thZ2VfX5SMF3N0YWJsZV9iYXNlbGluZXMuY29tbW9ulIwIX19uYW1lX1+UjB1zdGFibGVfYmFzZWxpbmVzLmNvbW1vbi51dGlsc5SMCF9fZmlsZV9flIxOQzpcVXNlcnNcbWV2ZWFcUHljaGFybVByb2plY3RzXFNtYXJ0TWFudHNpbmVuXHN0YWJsZV9iYXNlbGluZXNcY29tbW9uXHV0aWxzLnB5lHVOTmgAjBBfbWFrZV9lbXB0eV9jZWxslJOUKVKUhZR0lFKUjBxjbG91ZHBpY2tsZS5jbG91ZHBpY2tsZV9mYXN0lIwSX2Z1bmN0aW9uX3NldHN0YXRllJOUaCB9lH2UKGgXaA6MDF9fcXVhbG5hbWVfX5SMGWNvbnN0YW50X2ZuLjxsb2NhbHM+LmZ1bmOUjA9fX2Fubm90YXRpb25zX1+UfZSMDl9fa3dkZWZhdWx0c19flE6MDF9fZGVmYXVsdHNfX5ROjApfX21vZHVsZV9flGgYjAdfX2RvY19flE6MC19fY2xvc3VyZV9flGgAjApfbWFrZV9jZWxslJOURz+5mZmZmZmahZRSlIWUjBdfY2xvdWRwaWNrbGVfc3VibW9kdWxlc5RdlIwLX19nbG9iYWxzX1+UfZR1hpSGUjAu"
+    },
+    "clip_range_vf": null,
+    "verbose": 1,
+    "policy_class": {
+        ":type:": "<class 'type'>",
+        ":serialized:": "gAWVLwAAAAAAAACMHXN0YWJsZV9iYXNlbGluZXMucHBvLnBvbGljaWVzlIwJUFBPUG9saWN5lJOULg==",
+        "__module__": "stable_baselines.ppo.policies",
+        "__doc__": "\n    Policy class (with both actor and critic) for A2C and derivates (PPO).\n\n    :param observation_space: (gym.spaces.Space) Observation space\n    :param action_space: (gym.spaces.Space) Action space\n    :param learning_rate: (callable) Learning rate schedule (could be constant)\n    :param net_arch: ([int or dict]) The specification of the policy and value networks.\n    :param activation_fn: (nn.Module) Activation function\n    :param adam_epsilon: (float) Small values to avoid NaN in ADAM optimizer\n    :param ortho_init: (bool) Whether to use or not orthogonal initialization\n    :param log_std_init: (float) Initial value for the log standard deviation\n    ",
+        "__init__": "<function PPOPolicy.__init__ at 0x0000025C55F24820>",
+        "_build": "<function PPOPolicy._build at 0x0000025C55F248B0>",
+        "save": "<function PPOPolicy.save at 0x0000025C55F24940>",
+        "load": "<function PPOPolicy.load at 0x0000025C55F249D0>",
+        "call": "<tensorflow.python.eager.def_function.Function object at 0x0000025C534AF640>",
+        "_get_latent": "<function PPOPolicy._get_latent at 0x0000025C55F24AF0>",
+        "_get_action_dist_from_latent": "<function PPOPolicy._get_action_dist_from_latent at 0x0000025C55F24C10>",
+        "actor_forward": "<function PPOPolicy.actor_forward at 0x0000025C55F24CA0>",
+        "evaluate_actions": "<tensorflow.python.eager.def_function.Function object at 0x0000025C534AF250>",
+        "value_forward": "<function PPOPolicy.value_forward at 0x0000025C55F24DC0>"
+    },
+    "observation_space": {
+        ":type:": "<class 'gym.spaces.box.Box'>",
+        ":serialized:": "gAWVDgwAAAAAAACMDmd5bS5zcGFjZXMuYm94lIwDQm94lJOUKYGUfZQojAVkdHlwZZSMBW51bXB5lIwFZHR5cGWUk5SMAmY4lImIh5RSlChLA4wBPJROTk5K/////0r/////SwB0lGKMBXNoYXBllEsESyaGlIwDbG93lIwSbnVtcHkuY29yZS5udW1lcmljlIwLX2Zyb21idWZmZXKUk5QolsAEAAAAAAAAAAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/wAAAAAAAPD/AAAAAAAA8P8AAAAAAADw/5RoC0sESyaGlIwBQ5R0lFKUjARoaWdolGgTKJbABAAAAAAAAAAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H8AAAAAAADwfwAAAAAAAPB/AAAAAAAA8H+UaAtLBEsmhpRoFnSUUpSMDWJvdW5kZWRfYmVsb3eUaBMolpgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACUaAiMAmIxlImIh5RSlChLA4wBfJROTk5K/////0r/////SwB0lGJLBEsmhpRoFnSUUpSMDWJvdW5kZWRfYWJvdmWUaBMolpgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACUaCJLBEsmhpRoFnSUUpSMCl9ucF9yYW5kb22UTnViLg==",
+        "dtype": "float64",
+        "shape": [
+            4,
+            38
+        ],
+        "low": "[[-inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf\n  -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf\n  -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf]\n [-inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf\n  -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf\n  -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf]\n [-inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf\n  -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf\n  -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf]\n [-inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf\n  -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf\n  -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf]]",
+        "high": "[[inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf\n  inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf\n  inf inf]\n [inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf\n  inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf\n  inf inf]\n [inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf\n  inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf\n  inf inf]\n [inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf\n  inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf\n  inf inf]]",
+        "bounded_below": "[[False False False False False False False False False False False False\n  False False False False False False False False False False False False\n  False False False False False False False False False False False False\n  False False]\n [False False False False False False False False False False False False\n  False False False False False False False False False False False False\n  False False False False False False False False False False False False\n  False False]\n [False False False False False False False False False False False False\n  False False False False False False False False False False False False\n  False False False False False False False False False False False False\n  False False]\n [False False False False False False False False False False False False\n  False False False False False False False False False False False False\n  False False False False False False False False False False False False\n  False False]]",
+        "bounded_above": "[[False False False False False False False False False False False False\n  False False False False False False False False False False False False\n  False False False False False False False False False False False False\n  False False]\n [False False False False False False False False False False False False\n  False False False False False False False False False False False False\n  False False False False False False False False False False False False\n  False False]\n [False False False False False False False False False False False False\n  False False False False False False False False False False False False\n  False False False False False False False False False False False False\n  False False]\n [False False False False False False False False False False False False\n  False False False False False False False False False False False False\n  False False False False False False False False False False False False\n  False False]]",
+        "_np_random": null
+    },
+    "action_space": {
+        ":type:": "<class 'gym.spaces.box.Box'>",
+        ":serialized:": "gAWVrgEAAAAAAACMDmd5bS5zcGFjZXMuYm94lIwDQm94lJOUKYGUfZQojAVkdHlwZZSMBW51bXB5lIwFZHR5cGWUk5SMAmY4lImIh5RSlChLA4wBPJROTk5K/////0r/////SwB0lGKMBXNoYXBllEsFhZSMA2xvd5SMEm51bXB5LmNvcmUubnVtZXJpY5SMC19mcm9tYnVmZmVylJOUKJYoAAAAAAAAAAAAAAAAAFnAAAAAAAAAWcAAAAAAAABZwAAAAAAAAFnAAAAAAAAAWcCUaAtLBYWUjAFDlHSUUpSMBGhpZ2iUaBMoligAAAAAAAAAAAAAAAAAWUAAAAAAAABZQAAAAAAAAFlAAAAAAAAAWUAAAAAAAABZQJRoC0sFhZRoFnSUUpSMDWJvdW5kZWRfYmVsb3eUaBMolgUAAAAAAAAAAQEBAQGUaAiMAmIxlImIh5RSlChLA4wBfJROTk5K/////0r/////SwB0lGJLBYWUaBZ0lFKUjA1ib3VuZGVkX2Fib3ZllGgTKJYFAAAAAAAAAAEBAQEBlGgiSwWFlGgWdJRSlIwKX25wX3JhbmRvbZROdWIu",
+        "dtype": "float64",
+        "shape": [
+            5
+        ],
+        "low": "[-100. -100. -100. -100. -100.]",
+        "high": "[100. 100. 100. 100. 100.]",
+        "bounded_below": "[ True  True  True  True  True]",
+        "bounded_above": "[ True  True  True  True  True]",
+        "_np_random": null
+    },
+    "n_envs": 4,
+    "seed": 0,
+    "policy_kwargs": {
+        ":type:": "<class 'dict'>",
+        ":serialized:": "gAWVpwAAAAAAAAB9lIwIbmV0X2FyY2iUXZQoTQABTQABjAhidWlsdGluc5SMBGRpY3SUk5R9lIwCdmaUjDN0ZW5zb3JmbG93LnB5dGhvbi50cmFpbmluZy50cmFja2luZy5kYXRhX3N0cnVjdHVyZXOUjAtMaXN0V3JhcHBlcpSTlF2UKEtAS0BlhZRSlHOFlFKUaAV9lIwCcGmUaApdlChLQEtAZYWUUpRzhZRSlGVzLg==",
+        "net_arch": "[256, 256, DictWrapper({'vf': ListWrapper([64, 64])}), DictWrapper({'pi': ListWrapper([64, 64])})]"
+    }
+}
