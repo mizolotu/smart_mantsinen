@@ -67,7 +67,7 @@ python plot_results.py
 ```
 2. Demonstrate the policy trained:
 ```bash
-python demonstrate_ppo.py -c <first, last or best>
+python demonstrate_ppo.py -t <trajectory csv file> -c <first, last or best>
 ```
 The first checkpoint corresponds to the model pretrained with supervised learning.
 
