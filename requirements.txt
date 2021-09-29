@@ -7,3 +7,5 @@ tensorflow==2.6.0
 tenosrflow-probability
 pyautogui
 opencv-python
+plotly
+psutil
