@@ -29,6 +29,7 @@ class MeveaRunner(AbstractEnvRunner):
         self.server = env.server
         self.recording = False
         self.debug = debug
+        self.is_solver_starting = False
 
         # copy model to different directories to deal with data.tmp bug
 
@@ -62,13 +63,17 @@ class MeveaRunner(AbstractEnvRunner):
         self.mb_rewards = [[] for _ in range(self.n_envs)]
         self.scores = [[] for _ in range(self.n_envs)]
 
-    def _start(self, headless=True, sleep_interval=1):
+    def _start(self, headless=False, sleep_interval=1):
         self.backend_procs = []
+        self.start_times = []
+        self.is_solver_starting = True
         for mvs, server in zip(self.model_dirs, self.server):
             proc = start_solver(self.solver_path, mvs, headless=headless)
             self.backend_procs.append(proc)
             while not is_backend_registered(server, proc.pid):
                 sleep(sleep_interval)
+            self.start_times.append(time())
+        self.is_solver_starting = False
 
     def record(self, video_file, sleep_interval=0.25, x=210, y=90, width=755, height=400):
         screen_size = pyautogui.Size(width, height)
@@ -212,11 +217,11 @@ class MeveaRunner(AbstractEnvRunner):
 
         return mb_obs, mb_returns, mb_dones, mb_actions, mb_values, mb_neglogpacs, mb_states, ep_infos, true_reward
 
-    def _run_one(self, env_idx, sleep_interval=3):
+    def _run_one(self, env_idx, headless, sleep_interval=1, delay_interval=2):
 
         # sleep to prevent pressure bug
 
-        sleep(sleep_interval)
+        sleep(delay_interval)
 
         # start timer
 
@@ -226,6 +231,7 @@ class MeveaRunner(AbstractEnvRunner):
 
         if self.debug:
             print(f'Reseting {env_idx}')
+            print(f'In {env_idx}, time between register and reset: {time() - self.start_times[env_idx]}')
         self.obs[env_idx:env_idx+1] = self.env.reset_one(env_idx)
 
         if self.debug:
@@ -257,6 +263,27 @@ class MeveaRunner(AbstractEnvRunner):
             tnow = time()
 
             self.obs[env_idx], rewards, self.dones[env_idx], infos = self.env.step_one(env_idx, clipped_actions)
+
+            # reset if done
+
+            if self.dones[env_idx]:
+                print(f'Env {env_idx} is done')
+                stop_solver(self.backend_procs[env_idx])
+                delete_id(self.server[env_idx], self.backend_procs[env_idx].pid)
+                while self.is_solver_starting:
+                    sleep(sleep_interval)
+                self.is_solver_starting = True
+                proc = start_solver(self.solver_path, self.model_dirs[env_idx], headless=headless)
+                self.backend_procs[env_idx] = proc
+                while not is_backend_registered(self.server[env_idx], proc.pid):
+                    sleep(sleep_interval)
+                self.start_times[env_idx] = time()
+                self.is_solver_starting = False
+                sleep(delay_interval)
+                self.env.set_attr('id', [proc.pid], indices=[env_idx])
+                if self.debug:
+                    print(f'In {env_idx}, time between register and reset: {time() - self.start_times[env_idx]}')
+                self.obs[env_idx:env_idx + 1] = self.env.reset_one(env_idx)
 
             if self.debug:
                 print('Env', env_idx, 'step takes', time() - tnow, 'seconds')
@@ -332,7 +359,7 @@ class MeveaRunner(AbstractEnvRunner):
 
         threads = []
         for env_idx in range(self.n_envs):
-            th = Thread(target=self._run_one, args=(env_idx,))
+            th = Thread(target=self._run_one, args=(env_idx, headless))
             th.start()
             threads.append(th)
         for th in threads:

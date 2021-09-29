@@ -3,7 +3,8 @@ import numpy as np
 
 from collections import OrderedDict
 from typing import Sequence
-from common.base_vec_env import VecEnv, CloudpickleWrapper
+from stable_baselines.common.vec_env.base_vec_env import VecEnv, CloudpickleWrapper
+
 
 def _worker(remote, parent_remote, env_fn_wrapper):
     parent_remote.close()

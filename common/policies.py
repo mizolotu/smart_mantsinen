@@ -582,7 +582,7 @@ class FeedForwardPolicy(ActorCriticPolicy):
     """
 
     def __init__(self, sess, ob_space, ac_space, n_env, n_steps, n_batch, reuse=False, layers=None, net_arch=None,
-                 act_fun=tf.tanh, cnn_extractor=nature_cnn, feature_extraction="cnn", **kwargs):
+                 act_fun=tf.nn.relu, cnn_extractor=nature_cnn, feature_extraction="cnn", **kwargs):
         super(FeedForwardPolicy, self).__init__(sess, ob_space, ac_space, n_env, n_steps, n_batch, reuse=reuse,
                                                 scale=(feature_extraction == "cnn"))
 
@@ -608,8 +608,7 @@ class FeedForwardPolicy(ActorCriticPolicy):
 
             self._value_fn = linear(vf_latent, 'vf', 1)
 
-            self._proba_distribution, self._policy, self.q_value = \
-                self.pdtype.proba_distribution_from_latent(pi_latent, vf_latent, init_scale=0.01)
+            self._proba_distribution, self._policy, self.q_value = self.pdtype.proba_distribution_from_latent(pi_latent, vf_latent, init_scale=0.01)
 
         self._setup_init()
 
@@ -803,3 +802,10 @@ def register_policy(name, policy):
         raise ValueError("Error: the name {} is alreay registered for a different policy, will not override."
                          .format(name))
     _policy_registry[sub_class][name] = policy
+
+def demonstration_model(obs, ac_space, net_arch=[256, 256]):
+    latent = obs
+    for idx, layer in enumerate(net_arch):
+        latent = tf.nn.relu(linear(latent, f'dm{idx}', layer, init_scale=np.sqrt(2)))
+    latent = linear(latent, f'dm{idx + 1}', ac_space.shape[0], init_scale=np.sqrt(2))
+    return latent

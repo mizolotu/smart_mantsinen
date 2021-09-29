@@ -1,11 +1,13 @@
-import argparse, sys
+import argparse
 import os.path as osp
+import numpy as np
 
 from env_frontend import MantsinenBasic
 from common.server_utils import is_server_running
 from time import sleep
-from baselines.ppo2.ppo2 import PPO2 as ppo
-from common.mevea_vec_env import MeveaVecEnv
+from stable_baselines.ppo.ppod import PPOD as ppo
+from stable_baselines.ppo.policies import PPOPolicy as policy
+from stable_baselines.common.vec_env.mevea_vec_env import MeveaVecEnv
 from common.data_utils import prepare_trajectories
 from config import *
 
@@ -19,22 +21,12 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-t', '--trajectory', help='Trajectory file.', default='trajectory1.csv')
-    parser.add_argument('-c', '--checkpoint', help='Checkpoint file.', default='models/mevea/mantsinen/ppo/model_checkpoints/rl_model_4677632_steps.zip')
-    parser.add_argument('-C', '--checkpoints', help='Checkpoint files.', default=[
-        'models/mevea/mantsinen/ppo/model_checkpoints/rl_model_0_steps.zip',
-        'models/mevea/mantsinen/ppo/model_checkpoints/rl_model_10010624_steps.zip',
-        'models/mevea/mantsinen/ppo/model_checkpoints/rl_model_20004864_steps.zip',
-        'models/mevea/mantsinen/ppo/model_checkpoints/rl_model_30015488_steps.zip',
-        'models/mevea/mantsinen/ppo/model_checkpoints/rl_model_39108608_steps.zip',
-        'models/mevea/mantsinen/ppo/model_checkpoints/rl_model_50003968_steps.zip',
-        'models/mevea/mantsinen/ppo/model_checkpoints/rl_model_60002304_steps.zip',
-        'models/mevea/mantsinen/ppo/model_checkpoints/rl_model_70000640_steps.zip',
-        'models/mevea/mantsinen/ppo/model_checkpoints/rl_model_78594048_steps.zip',
-    ])
+    parser.add_argument('-m', '--model', help='Model directory.', default='models/mevea/mantsinen/ppo')
+    parser.add_argument('-c', '--checkpoint', help='Checkpoint', default='best', choices=['first', 'last', 'best'])
+    parser.add_argument('-v', '--video', help='Record video?', type=bool)
     args = parser.parse_args()
 
-    if args.checkpoint is None and args.checkpoints is None:
-        sys.exit(1)
+    chkpt_dir = args.model
 
     # check that server is running
 
@@ -45,12 +37,14 @@ if __name__ == '__main__':
     # extract waypoints
 
     trajectory_file = osp.join(trajectory_dir, args.trajectory)
-    _, _, waypoints = prepare_trajectories(signal_dir, [trajectory_file], use_inputs=use_inputs, use_outputs=use_outputs, action_scale=action_scale, lookback=lookback)
+    _, _, waypoints, _, last_dist_max = prepare_trajectories(signal_dir, [trajectory_file], use_inputs=use_inputs, use_outputs=use_outputs, action_scale=action_scale, lookback=lookback)
+    n_stay_max = np.inf
 
     # create environment
 
     env_fns = [make_env(
         MantsinenBasic,
+        0,
         model_path,
         model_dir,
         signal_dir,
@@ -61,30 +55,24 @@ if __name__ == '__main__':
         use_inputs,
         use_outputs,
         action_scale,
-        tstep
+        tstep,
+        n_stay_max,
+        last_dist_max,
+        bonus
     ) for data in waypoints]
     env = MeveaVecEnv(env_fns)
 
-    # checkpoints
+    # load model and run it in demo mode
 
-    if args.checkpoints is not None:
-        checkpoints = args.checkpoints
-    else:
-        checkpoints = [args.checkpoint]
-
-    # load model and run it in demo mode for each checkpoint
-
-    for checkpoint in checkpoints:
-        try:
-            model = ppo.load(checkpoint)
-            model.set_env(env)
-            print('Model has been successfully loaded from {0}'.format(checkpoint))
-            assert checkpoint.endswith('.zip')
-            cp_name = osp.basename(checkpoint)
-            output_fname = '{0}.mp4'.format(cp_name.split('.zip')[0])
-            output = osp.join(video_output, 'ppo', output_fname)
-            print('Recording to {0}'.format(output))
-            model.demo(output)
-        except Exception as e:
-            print(e)
-            break
+    try:
+        model = ppo(policy, env, policy_kwargs=dict(net_arch=[256, 256, dict(vf=[64, 64]), dict(pi=[64, 64])]), batch_size=batch_size, n_steps=nsteps,
+                    model_path=chkpt_dir, chkpt_name=args.checkpoint, tensorboard_log='tensorboard_log', verbose=1)
+        if args.video:
+            cp_name = osp.basename(args.checkpoint)
+            video_fname = f"{args.trajectory.split('.csv')[0]}_{cp_name.split('.zip')[0]}.mp4"
+            video_fpath = osp.join(video_output, 'ppo', video_fname)
+            print(f'Recording to {video_fpath}')
+            model.demo(video_file=video_fpath)
+        model.demo()
+    except Exception as e:
+        print(e)

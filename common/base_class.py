@@ -376,7 +376,7 @@ class BaseRLModel(ABC):
             print("Pretraining done.")
         return self
 
-    def pretrain(self, data_tr, data_val, batch_size, n_epochs=10, learning_rate=1e-3, l2_loss_weight=0.0, log_freq=100):
+    def pretrain(self, data_tr, batch_size, data_val=None, n_epochs=10, learning_rate=1e-3, patience = 100, l2_loss_weight=0.0, log_freq=100, savepath=None):
 
         continuous_actions = isinstance(self.action_space, gym.spaces.Box)
         discrete_actions = isinstance(self.action_space, gym.spaces.Discrete)
@@ -411,10 +411,12 @@ class BaseRLModel(ABC):
         obs_dim = self.observation_space.shape[0]
         act_dim = self.action_space.shape[0]
 
-        print(obs_dim, act_dim)
-
         ntrain = data_tr.shape[0]
         nbatches = ntrain // batch_size
+
+        val_loss_min = np.inf
+        val_loss_deq = deque(maxlen=10)
+        val_count = 0
 
         for epoch_idx in range(int(n_epochs)):
 
@@ -433,18 +435,37 @@ class BaseRLModel(ABC):
                 train_loss += train_loss_
             train_loss /= nbatches
 
-            # validation
+            val_loss = 0.0
 
-            expert_obs, expert_actions = data_val[:, :obs_dim], data_val[:, obs_dim:obs_dim + act_dim]
-            feed_dict = {
-                obs_ph: expert_obs,
-                actions_ph: expert_actions
-            }
+            if data_val is not None:
 
-            val_loss, _ = self.sess.run([loss, optim_op], feed_dict)
+                # validation
+
+                nval = data_val.shape[0]
+                for i in range(nbatches):
+                    idx = np.random.choice(nval, batch_size)
+                    expert_obs, expert_actions = data_val[idx, :obs_dim], data_val[idx, obs_dim:obs_dim + act_dim]
+                    feed_dict = {
+                        obs_ph: expert_obs
+                    }
+                    actions = self.sess.run([deterministic_actions_ph], feed_dict)
+                    val_loss_ = np.mean(np.square(actions - expert_actions))
+                    val_loss += val_loss_
+                val_loss /= nbatches
+                val_loss_deq.append(val_loss)
+                if np.mean(val_loss_deq) < val_loss_min:
+                    val_loss_min = np.mean(val_loss_deq)
+                    val_count = 0
+                    if savepath is not None:
+                        self.save(savepath)
+                else:
+                    val_count += 1
+
+                if val_count > patience:
+                    break
 
             if self.verbose > 0 and (n_epochs <= log_freq or ((epoch_idx + 1) % (n_epochs // log_freq)) == 0):
-                print('Epoch {0}/{1}: training loss = {2}, validation_loss = {3}'.format(epoch_idx + 1, n_epochs, train_loss, val_loss))
+                print(f'Epoch {epoch_idx+1}/{n_epochs}: training loss = {train_loss}, validation_loss={val_loss}, overfitting = {val_count}/{patience}')
 
             del expert_obs, expert_actions
 
@@ -1256,7 +1277,9 @@ class TensorboardWriter:
             if self.new_tb_log:
                 latest_run_id = latest_run_id + 1
             save_path = os.path.join(self.tensorboard_log_path, "{}_{}".format(self.tb_log_name, latest_run_id))
-            self.writer = tf.compat.v1.summary.FileWriter(save_path, graph=self.graph)
+            with tf.compat.v1.Graph().as_default():
+                self.writer = tf.compat.v1.summary.FileWriter(save_path, graph=self.graph)
+            #self.writer = tf.compat.v1.summary.FileWriter(save_path, graph=self.graph)
         return self.writer
 
     def _get_latest_run_id(self):

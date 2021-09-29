@@ -136,12 +136,16 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints=16, use_input
     trajectories_tr = []
     trajectories_val = []
     waypoints = []
+    n_stay_maxs = []
+    last_dists = []
+    rews = []
 
     for ti, fpath in enumerate(trajectory_files):
 
         # load trajectories
 
         rew_t, inputs, outputs, rewards = load_trajectory(fpath, signals)
+        rews.append(rewards)
 
         # calculate way points by interpolating over time
 
@@ -155,6 +159,7 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints=16, use_input
             wpoints[:, i] = np.interp(waypoint_times, rew_t, rewards[:, i])
             #wpoints[:, i] = rewards[:, i]
         waypoints.append(wpoints)
+        n_stay = np.zeros(n_waypoints)
 
         # standardize data
 
@@ -173,12 +178,14 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints=16, use_input
 
         wp_first = wpoints[0, :]
         wp_last = wpoints[-1, :]
+
         for i in range(idx0, n - 1):
 
             dist_to_wps = np.linalg.norm(wpoints - rewards[i, :], axis=1)
             idx_sorted = np.argsort(dist_to_wps)
             wp_nearest_idx = idx_sorted[0]
             wp_nearest = wpoints[wp_nearest_idx, :]
+            n_stay[idx_sorted[0]] += 1
 
             next_obs_dist_to_wps = np.linalg.norm(wpoints - rewards[i + 1, :], axis=1)
             next_obs_idx_sorted = np.argsort(next_obs_dist_to_wps)
@@ -202,15 +209,18 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints=16, use_input
             from_rp_to_first_wp_with_lookback = wp_first - rp_with_lookback
             from_rp_to_last_wp_with_lookback = wp_last - rp_with_lookback
             traj = np.hstack([
-                (from_rp_to_first_wp_with_lookback.reshape(1, -1)[0] - v_min) / (v_max - v_min + eps),
-                (from_rp_to_nearest_wp_with_lookback.reshape(1, -1)[0] - v_min) / (v_max - v_min + eps),
-                (from_rp_to_last_wp_with_lookback.reshape(1, -1)[0] - v_min) / (v_max - v_min + eps)
+                ((from_rp_to_first_wp_with_lookback.reshape(1, -1)[0] - v_min) / (v_max - v_min + eps)).reshape(lookback, -1),
+                ((from_rp_to_nearest_wp_with_lookback.reshape(1, -1)[0] - v_min) / (v_max - v_min + eps)).reshape(lookback, -1),
+                ((from_rp_to_last_wp_with_lookback.reshape(1, -1)[0] - v_min) / (v_max - v_min + eps)).reshape(lookback, -1)
             ])
 
-            # reward (only the second component)
+            # reward
 
-            reward = np.linalg.norm(wp_last - rewards[i, :])
-            reward = reward / d_max
+            reward_c1 = np.linalg.norm(wp_nearest - rewards[i, :])
+            reward_c1 += reward_c1 / d_max
+            reward_c2 = np.linalg.norm(wp_last - rewards[i, :])
+            reward_c2 += reward_c2 / d_max
+            reward = 1 - 0.5 * reward_c1 - 0.5 * reward_c2
 
             # creating next obs
 
@@ -232,17 +242,19 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints=16, use_input
                 (next_obs_from_rp_to_first_wp_with_lookback.reshape(1, -1)[0] - v_min) / (v_max - v_min + eps),
                 (next_obs_from_rp_to_nearest_wp_with_lookback.reshape(1, -1)[0] - v_min) / (v_max - v_min + eps),
                 (next_obs_from_rp_to_last_wp_with_lookback.reshape(1, -1)[0] - v_min) / (v_max - v_min + eps)
-            ])
+            ]).reshape(lookback, -1)
 
             # add signal values
 
             if use_inputs:
-                traj = np.append(traj, np.mean(is_std_with_lookback, axis=0))
-                next_obs = np.append(next_obs, np.mean(next_obs_is_std_with_lookback, axis=0))
+                traj = np.hstack([traj, is_std_with_lookback])
+                next_obs = np.hstack([next_obs, next_obs_is_std_with_lookback])
 
             if use_outputs:
-                traj = np.append(traj, np.mean(os_std_with_lookback, axis=0))
-                next_obs = np.append(next_obs, np.mean(next_obs_os_std_with_lookback, axis=0))
+                traj = np.hstack([traj, os_std_with_lookback])
+                next_obs = np.hstack([next_obs, next_obs_os_std_with_lookback])
+
+            traj = traj.reshape(1, -1)
 
             # add actions
 
@@ -270,4 +282,11 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints=16, use_input
                 print('What??')
                 raise NotImplemented
 
-    return np.vstack(trajectories_tr), np.vstack(trajectories_val), waypoints
+        n_stay_maxs.append(np.max(n_stay / n))
+
+        last_dists.append(np.linalg.norm(wpoints[-1] - wpoints[-2]))
+
+    n_stay_thr = np.maximum(np.mean(n_stay_maxs) + 3 * np.std(n_stay_maxs), np.max(n_stay_maxs))
+    last_dist_thr = np.maximum(np.mean(last_dists) + 3 * np.std(last_dists), np.max(last_dists))
+
+    return np.vstack(trajectories_tr), np.vstack(trajectories_val), waypoints, n_stay_thr, last_dist_thr

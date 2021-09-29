@@ -1,18 +1,14 @@
-import argparse, os, sys
+import os
 import os.path as osp
-import numpy as np
 
 from env_frontend import MantsinenBasic
 from common.server_utils import is_server_running
 from time import sleep
-from baselines.ppo2.ppo2 import PPO2 as ppo
-from common.policies import MlpPolicy
-from common.mevea_vec_env import MeveaVecEnv
-from common.mevea_runner import MeveaRunner
-from common.model_utils import find_checkpoint_with_latest_date
+from stable_baselines.ppo.ppod import PPOD as ppo
+from stable_baselines.ppo.policies import MlpPolicy
+
+from stable_baselines.common.vec_env.mevea_vec_env import MeveaVecEnv
 from common.data_utils import prepare_trajectories
-from common.callbacks import CheckpointCallback
-from common import logger
 from config import *
 from itertools import cycle
 
@@ -22,18 +18,10 @@ def make_env(env_class, *args):
 
 if __name__ == '__main__':
 
-    # process arguments
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--checkpoint', help='Checkpoint file.')  # e.g. "models/mevea/mantsinen/ppo/model_checkpoints/rl_model_5001216_steps.zip"
-    parser.add_argument('-s', '--save', type=bool, help='Save new training steps?', default=True)
-    args = parser.parse_args()
-
     # configure logger
 
     format_strs = os.getenv('', 'stdout,log,csv').split(',')
     log_dir = osp.join(os.path.abspath(model_output), 'ppo')
-    logger.configure(log_dir, format_strs)
 
     # check that server is running
 
@@ -44,7 +32,7 @@ if __name__ == '__main__':
     # prepare training data
 
     trajectory_files = [osp.join(trajectory_dir, fpath) for fpath in os.listdir(trajectory_dir) if fpath.endswith('csv')]
-    bc_train, bc_val, waypoints = prepare_trajectories(
+    bc_train, bc_val, waypoints, n_stay_max, last_dist_max = prepare_trajectories(
         signal_dir,
         trajectory_files,
         use_inputs=use_inputs,
@@ -53,9 +41,7 @@ if __name__ == '__main__':
         lookback=lookback,
         tstep=tstep
     )
-
-    #import pandas
-    #pandas.DataFrame(bc_train).to_csv('tmp.txt', index=None, header=None)
+    n_stay_max *= nsteps
 
     # create environments
 
@@ -65,6 +51,7 @@ if __name__ == '__main__':
     env_fns = [
         make_env(
             MantsinenBasic,
+            i,
             model_path,
             model_dir,
             signal_dir,
@@ -75,40 +62,31 @@ if __name__ == '__main__':
             use_inputs,
             use_outputs,
             action_scale,
-            tstep
+            tstep,
+            n_stay_max,
+            last_dist_max,
+            bonus
         ) for i in wp_inds
     ]
     env = MeveaVecEnv(env_fns)
 
-    try:
+    # create or load model
 
-        # load model
+    chkp_dir = log_dir
+    if not osp.isdir(chkp_dir):
+        os.mkdir(chkp_dir)
 
-        if args.checkpoint is None:
-            checkpoint_file = find_checkpoint_with_latest_date('{0}/model_checkpoints/'.format(log_dir))
-        else:
-            checkpoint_file = args.checkpoint
-        model = ppo.load(checkpoint_file)
-        model.set_env(env)
-        print('Model has been successfully loaded from {0}'.format(checkpoint_file))
+    model = ppo(MlpPolicy, env, policy_kwargs=dict(net_arch = [256, 256, dict(vf=[64, 64]), dict(pi=[64, 64])]), batch_size=batch_size,
+                n_steps=nsteps, model_path=chkp_dir, log_path=log_dir, tensorboard_log='tensorboard_log', verbose=1)
 
-    except Exception as e:
+    if not model.loaded:
+        model.pretrain(bc_train, data_val=bc_val, nepochs=npretrain)
+        model.save(chkp_dir, 'first')
 
-        exc_type, exc_obj, exc_tb = sys.exc_info()
-        fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-        print(exc_type, fname, exc_tb.tb_lineno)
+    # disable cuda
 
-        # create and pretrain model
-
-        model = ppo(MlpPolicy, env, nminibatches=nsteps // batch_size, runner=MeveaRunner, n_steps=nsteps, verbose=1)
-        model.pretrain(np.vstack([bc_train, bc_val]), bc_val, batch_size=batch_size, n_epochs=npretrain, log_freq=npretrain, learning_rate=1e-4)
-        if not osp.isdir(f'{log_dir}/model_checkpoints/'):
-            os.mkdir(f'{log_dir}/model_checkpoints/')
-        model.save(f'{log_dir}/model_checkpoints/rl_model_0_steps.zip')
+    os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
     # continue training
 
-    callbacks = []
-    if args.save:
-        callbacks.append(CheckpointCallback(save_freq=nsteps*nenvs, save_path='{0}/model_checkpoints/'.format(log_dir)))
-    model.learn(total_timesteps=ntrain, callback=callbacks)
+    model.learn(total_timesteps=ntrain)

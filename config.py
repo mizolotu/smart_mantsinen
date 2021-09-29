@@ -18,3 +18,4 @@ action_scale = 100
 lookback = 4
 wp_dist = 1
 tstep = 0.01
+bonus = 10

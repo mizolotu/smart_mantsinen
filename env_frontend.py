@@ -10,12 +10,14 @@ class MantsinenBasic(gym.Env):
 
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, mvs, env_dir, signal_dir, server_url, waypoints, nsteps, lookback, use_inputs, use_outputs, scale, tstep):
+    def __init__(self, env_idx, mvs, env_dir, signal_dir, server_url, waypoints, nsteps, lookback,
+                 use_inputs, use_outputs, scale, tstep, n_stay_max, last_dist_max, bonus):
 
         # init params
 
         self.mvs = mvs
         self.dir = env_dir
+        self.env_idx = env_idx
         self.id = None
         self.server = server_url
         if type(waypoints).__name__ == 'list':
@@ -29,6 +31,10 @@ class MantsinenBasic(gym.Env):
         self.use_inputs = use_inputs
         self.use_outputs = use_outputs
         self.tstep = tstep
+        self.n_stay_max = n_stay_max
+        self.last_dist_max = last_dist_max
+        self.bonus = bonus
+
         self.xyz_buff = deque(maxlen=lookback)
         self.i_buff = deque(maxlen=lookback)
         self.o_buff = deque(maxlen=lookback)
@@ -56,7 +62,7 @@ class MantsinenBasic(gym.Env):
 
         npoints = 3  # number of waypoints participating in each observation calculation
         rew_dim = len(self.signals['reward'])
-        obs_dim = lookback * rew_dim * npoints
+        obs_dim = rew_dim * npoints
         self.rew_min = np.array(mins['reward'])
         self.rew_max = np.array(maxs['reward'])
         self.v_min = np.hstack([self.rew_min - self.rew_max] * lookback)
@@ -77,11 +83,11 @@ class MantsinenBasic(gym.Env):
 
         self.step_simulation_time = None
         self.last_simulation_time = None
-        self.step_count = 0
+        self.total_step_count = 0
 
         # set spaces
 
-        self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(obs_dim,), dtype=np.float)
+        self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(lookback, obs_dim,), dtype=np.float)
         self.action_space = gym.spaces.Box(low=-scale, high=scale, shape=(act_dim,), dtype=np.float)
 
     def reset(self, init_sleep=0.1):
@@ -91,6 +97,8 @@ class MantsinenBasic(gym.Env):
         self.last_simulation_time = None
         self.step_simulation_time = None
         self.step_count = 0
+        self.cum_dist_to_last = 0
+        self.reward = 0
 
         # post signals
 
@@ -111,13 +119,13 @@ class MantsinenBasic(gym.Env):
         while len(self.xyz_buff) < self.lookback or len(self.i_buff) < self.lookback or len(self.o_buff) < self.lookback:
             input_output_obs, reward_components, last_state_time = self._get_state()
             xyz = np.array(reward_components)
-            self.xyz_buff.append(xyz)
+            self.xyz_buff.appendleft(xyz)
             i = np.array(input_output_obs)[self.obs_input_index]
             i_std = self._std_vector(i, self.obs_input_min, self.obs_input_max)
-            self.i_buff.append(i_std)
+            self.i_buff.appendleft(i_std)
             o = np.array(input_output_obs)[self.obs_output_index]
             o_std = self._std_vector(o, self.obs_output_min, self.obs_output_max)
-            self.o_buff.append(o_std)
+            self.o_buff.appendleft(o_std)
 
         # update simulation times
 
@@ -128,6 +136,7 @@ class MantsinenBasic(gym.Env):
 
         idx = np.random.choice(len(self.waypoints_list))
         self.waypoints = self.waypoints_list[idx]
+        self.n_stay = np.zeros(self.waypoints.shape[0])
 
         # calculate obs
 
@@ -150,10 +159,13 @@ class MantsinenBasic(gym.Env):
         action = self._orig_vector(action, self.act_min, self.act_max)
         self._set_action(action)
         self.step_count += 1
+        self.total_step_count +=1
 
         # get state and update simulation time
 
+        #print(self.env_idx, self.step_count, self.total_step_count % self.nsteps, 'before get_state')
         input_output_obs, reward_components, self.last_simulation_time = self._get_state()
+        #print(self.env_idx, self.step_count, self.total_step_count % self.nsteps, 'after get_state')
         new_state_simulation_time_max = self.step_simulation_time + self.tstep
         if self.last_simulation_time > new_state_simulation_time_max:
             self.step_simulation_time = self.last_simulation_time
@@ -165,16 +177,17 @@ class MantsinenBasic(gym.Env):
         xyz = np.array(reward_components)
         wp_nearst, wp_before_nearest, wp_fater_nearest = self._calculate_relations_to_wps(xyz)
         reward, done, info = self._calculate_reward(xyz)
+        self.reward += reward
 
         # calculate new obs
 
-        self.xyz_buff.append(xyz)
+        self.xyz_buff.appendleft(xyz)
         i = np.array(input_output_obs)[self.obs_input_index]
         i_std = self._std_vector(i, self.obs_input_min, self.obs_input_max)
-        self.i_buff.append(i_std)
+        self.i_buff.appendleft(i_std)
         o = np.array(input_output_obs)[self.obs_output_index]
         o_std = self._std_vector(o, self.obs_output_min, self.obs_output_max)
-        self.o_buff.append(o_std)
+        self.o_buff.appendleft(o_std)
         obs = self._calculate_obs(wp_nearst, wp_before_nearest, wp_fater_nearest)
         #best_idx = np.argmin(np.linalg.norm(self.obs_vals - obs[None, :], axis=1))
         #print(best_idx, self.vals[best_idx, self.observation_space.shape[0]: self.observation_space.shape[0] + self.action_space.shape[0]])
@@ -222,18 +235,18 @@ class MantsinenBasic(gym.Env):
         from_rp_to_wp_first = self.waypoints[0, :] - rp
         from_rp_to_wp_last = self.waypoints[-1, :] - rp
         obs = np.hstack([
-            self._std_vector(from_rp_to_wp_first.reshape(1, -1)[0], self.v_min, self.v_max),
+            self._std_vector(from_rp_to_wp_first.reshape(1, -1)[0], self.v_min, self.v_max).reshape(self.lookback, -1),
             #self._std_vector(from_rp_to_wp_before_nearest.reshape(1, -1)[0], self.v_min, self.v_max),
-            self._std_vector(from_rp_to_wp_nearest.reshape(1, -1)[0], self.v_min, self.v_max),
+            self._std_vector(from_rp_to_wp_nearest.reshape(1, -1)[0], self.v_min, self.v_max).reshape(self.lookback, -1),
             #self._std_vector(from_rp_to_wp_after_nearest.reshape(1, -1)[0], self.v_min, self.v_max),
-            self._std_vector(from_rp_to_wp_last.reshape(1, -1)[0], self.v_min, self.v_max)
+            self._std_vector(from_rp_to_wp_last.reshape(1, -1)[0], self.v_min, self.v_max).reshape(self.lookback, -1)
         ])
         if self.use_inputs:
-            i = np.mean(np.vstack(self.i_buff), axis=0)
-            obs = np.append(obs, i)
+            i = np.vstack(self.i_buff)
+            obs = np.hstack([obs, i])
         if self.use_outputs:
-            o = np.mean(np.vstack(self.o_buff), axis=0)
-            obs = np.append(obs, o)
+            o = np.vstack(self.o_buff)
+            obs = np.hstack([obs, o])
         return obs
 
     def _set_action(self, action):
@@ -253,8 +266,7 @@ class MantsinenBasic(gym.Env):
                 conditional.append(action[idx])
         post_action(self.server, self.id, action.tolist(), conditional, self.tstep)
 
-    def _calculate_reward(self, xyz, w_path=1):
-        done = False
+    def _calculate_reward(self, xyz):
         dists_to_wps = np.linalg.norm(xyz - self.waypoints, axis=1)
         idx_sorted = np.argsort(dists_to_wps)
         wp_nearest_idx = idx_sorted[0]
@@ -262,6 +274,17 @@ class MantsinenBasic(gym.Env):
         dist_to_nearest_wp_std = dist_to_nearest_wp / self.d_max
         dist_to_last = np.linalg.norm(xyz - self.waypoints[-1, :])
         dist_to_last_std = dist_to_last / self.d_max
-        score = 1 - w_path * dist_to_nearest_wp_std - dist_to_last_std
-        info = {'rc1': -dist_to_nearest_wp_std, 'rc2': -dist_to_last_std, 'rc3': 0}
+        self.n_stay[wp_nearest_idx] += 1
+        if dist_to_nearest_wp <= self.last_dist_max and self.n_stay[-1] > self.n_stay_max:
+            score = self.bonus
+            done = True
+            print(f'Mantsinen {self.env_idx} is done in {self.step_count} steps with average reward {self.reward / self.step_count} (reason: target!)')
+        elif np.max(self.n_stay) > self.n_stay_max:
+            score = -self.bonus
+            done = True
+            print(f'Mantsinen {self.env_idx} is done in {self.step_count} steps with average reward {self.reward / self.step_count} (reason: stuck!)')
+        else:
+            score = np.clip(1 - dist_to_nearest_wp_std - dist_to_last_std, 0, 1)
+            done = False
+        info = {'rc1': dist_to_nearest_wp_std, 'rc2': dist_to_last_std, 'rc3': 0}
         return score, done, info
