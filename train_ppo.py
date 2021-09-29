@@ -35,6 +35,7 @@ if __name__ == '__main__':
     bc_train, bc_val, waypoints, n_stay_max, last_dist_max = prepare_trajectories(
         signal_dir,
         trajectory_files,
+        n_waypoints=nwaypoints,
         use_inputs=use_inputs,
         use_outputs=use_outputs,
         action_scale=action_scale,

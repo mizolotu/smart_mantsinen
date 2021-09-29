@@ -8,7 +8,7 @@ from time import sleep
 from stable_baselines.ppo.ppod import PPOD as ppo
 from stable_baselines.ppo.policies import PPOPolicy as policy
 from stable_baselines.common.vec_env.mevea_vec_env import MeveaVecEnv
-from common.data_utils import prepare_trajectories
+from common.data_utils import get_test_waypoints
 from config import *
 
 def make_env(env_class, *args):
@@ -20,7 +20,7 @@ if __name__ == '__main__':
     # process arguments
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-t', '--trajectory', help='Trajectory file.', default='trajectory1.csv')
+    parser.add_argument('-w', '--waypoints', help='Text file with waypoints.', default='example_waypoints.txt')
     parser.add_argument('-m', '--model', help='Model directory.', default='models/mevea/mantsinen/ppo')
     parser.add_argument('-c', '--checkpoint', help='Checkpoint', default='best', choices=['first', 'last', 'best'])
     parser.add_argument('-v', '--video', help='Record video?', type=bool)
@@ -36,8 +36,8 @@ if __name__ == '__main__':
 
     # extract waypoints
 
-    trajectory_file = osp.join(trajectory_dir, args.trajectory)
-    _, _, waypoints, _, last_dist_max = prepare_trajectories(signal_dir, [trajectory_file], use_inputs=use_inputs, use_outputs=use_outputs, action_scale=action_scale, lookback=lookback)
+    waypoints = get_test_waypoints(args.waypoints)
+    last_dist_max = np.linalg.norm(waypoints[-1] - waypoints[-2])
     n_stay_max = np.inf
 
     # create environment
@@ -49,7 +49,7 @@ if __name__ == '__main__':
         model_dir,
         signal_dir,
         server,
-        data,
+        waypoints,
         nsteps,
         lookback,
         use_inputs,
@@ -59,7 +59,7 @@ if __name__ == '__main__':
         n_stay_max,
         last_dist_max,
         bonus
-    ) for data in waypoints]
+    )]
     env = MeveaVecEnv(env_fns)
 
     # load model and run it in demo mode

@@ -107,7 +107,7 @@ def adjust_indexes(signals, identical_input_signals):
     act_index = np.array(act_index)
     return obs_input_index, act_index
 
-def prepare_trajectories(signal_dir, trajectory_files, n_waypoints=16, use_inputs=True, use_outputs=True, action_scale=1, lookback=4, tstep=0.01):
+def prepare_trajectories(signal_dir, trajectory_files, n_waypoints, use_inputs=True, use_outputs=True, action_scale=1, lookback=4, tstep=0.01):
 
     # load signals and their limits
 
@@ -290,3 +290,8 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints=16, use_input
     last_dist_thr = np.maximum(np.mean(last_dists) + 3 * np.std(last_dists), np.max(last_dists))
 
     return np.vstack(trajectories_tr), np.vstack(trajectories_val), waypoints, n_stay_thr, last_dist_thr
+
+def get_test_waypoints(fname):
+    v = pandas.read_csv(fname, header=None).values
+    assert v.shape[0] > 1, 'Not enough points, should be at least two!'
+    return v
