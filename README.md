@@ -57,7 +57,7 @@ python env_server.py
 ```bash
 python train_ppo.py
 ```
-<img src="https://drive.google.com/file/d/1IhupYLXCMP0V4w7jQmTTys2JTWZhdiQT/view?usp=sharing"/>
+<img src="figures/mevea/mantsinen/ppo/model.png"/>
 
 ## Postprocessing
 
@@ -73,7 +73,7 @@ The first checkpoint corresponds to the model pretrained with supervised learnin
 
 ## Results
 
-<img src="figures/mevea/mantsinen/ppo/policy_loss.png" width="200"/> <img src="figures/mevea/mantsinen/ppo/value_loss.png" width="200"/> <img src="figures/mevea/mantsinen/ppo/total_score.png" width="200"/>
+<img src="figures/mevea/mantsinen/ppo/policy_loss.png" width="250"/> <img src="figures/mevea/mantsinen/ppo/value_loss.png" width="250"/> <img src="figures/mevea/mantsinen/ppo/total_score.png" width="250"/>
 
 Model evaluation:
 - supervised (behavioral clonning): https://drive.google.com/file/d/12U97PRpldCd-K9r5iUCOpqb3AXWIF9ii/view?usp=sharing
