@@ -72,7 +72,8 @@ if __name__ == '__main__':
             video_fname = f"{args.trajectory.split('.csv')[0]}_{cp_name.split('.zip')[0]}.mp4"
             video_fpath = osp.join(video_output, 'ppo', video_fname)
             print(f'Recording to {video_fpath}')
-            model.demo(video_file=video_fpath)
-        model.demo()
+        else:
+            video_fpath = None
+        model.demo(video_file=video_fpath)
     except Exception as e:
         print(e)
