@@ -23880,3 +23880,23 @@ Logging to C:\Users\mevea\PycharmProjects\SmartMantsinen\models\mevea\mantsinen\
 | total_timesteps    | 3.01e+07  |
 | value_loss         | 11.7      |
 ----------------------------------
+------------------------------
+| ep_reward_mean  | 0.352    |
+| fps             | 60       |
+| iterations      | 1.84e+03 |
+| time_elapsed    | 509183   |
+| total_timesteps | 3.01e+07 |
+------------------------------
+------------------------------------
+| clip_range         | 0.1         |
+| entropy            | 0.91150314  |
+| ep_reward_mean     | 0.385       |
+| explained_variance | 0.967       |
+| fps                | 60          |
+| iterations         | 1.84e+03    |
+| policy_loss        | 0.004363766 |
+| std                | 0.60640085  |
+| time_elapsed       | 509452      |
+| total_timesteps    | 3.01e+07    |
+| value_loss         | 14.920914   |
+------------------------------------
