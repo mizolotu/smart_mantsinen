@@ -235,102 +235,353 @@ class MlpExtractor(Model):
 
 
 class Cnn1Extractor(Model):
-    """
-    Constructs an MLP that receives observations as an input and outputs a latent representation for the policy and
-    a value network. The ``net_arch`` parameter allows to specify the amount and size of the hidden layers and how many
-    of them are shared between the policy network and the value network. It is assumed to be a list with the following
-    structure:
 
-    1. An arbitrary length (zero allowed) number of integers each specifying the number of units in a shared layer.
-       If the number of ints is zero, there will be no shared layers.
-    2. An optional dict, to specify the following non-shared layers for the value network and the policy network.
-       It is formatted like ``dict(vf=[<value layer sizes>], pi=[<policy layer sizes>])``.
-       If it is missing any of the keys (pi or vf), no non-shared layers (empty list) is assumed.
-
-    For example to construct a network with one shared layer of size 55 followed by two non-shared layers for the value
-    network of size 255 and a single non-shared layer of size 128 for the policy network, the following layers_spec
-    would be used: ``[55, dict(vf=[255, 255], pi=[128])]``. A simple shared network topology with two layers of size 128
-    would be specified as [128, 128].
-
-
-    :param feature_dim: (int) Dimension of the feature vector (can be the output of a CNN)
-    :param net_arch: ([int or dict]) The specification of the policy and value networks.
-        See above for details on its formatting.
-    :param activation_fn: (tf.nn.activation) The activation function to use for the networks.
-    """
-    def __init__(self, lookback, net_arch, activation_fn, batchnorm=True, shared_trainable=True, vf_trainable=True, pi_trainable=True, dropout=0.5):
+    def __init__(self, net_arch, activation_fn, shared_trainable=True, vf_trainable=True, pi_trainable=True, dropout=0.5, gn_std=0.25):
         super(Cnn1Extractor, self).__init__()
 
-        shared_net, policy_net, value_net = [], [], []
+        self.shared_trainable = shared_trainable
+        self.vf_trainable = vf_trainable
+        self.pi_trainable = pi_trainable
+
+        self.shared_net, self.policy_net, self.value_net = [], [], []
+        self.shared_net_bn, self.policy_net_bn, self.value_net_bn = [], [], []
+        self.shared_net_gn = []
+        self.shared_net_do = []
         policy_only_layers = []  # Layer sizes of the network that only belongs to the policy network
         value_only_layers = []  # Layer sizes of the network that only belongs to the value network
-        #last_layer_dim_shared = feature_dim
 
         # Iterate through the shared layers and build the shared parts of the network
 
-        for idx, layer in enumerate(net_arch):
-            if isinstance(layer, int):  # Check that this is a shared layer
-                layer_size = layer
+        shared_part = [layer for layer in net_arch if isinstance(layer, tuple)]
+        splitted_part = [layer for layer in net_arch if isinstance(layer, dict)]
 
-                # TODO: give layer a meaningful name
-                # shared_net.append(layers.Dense(layer_size, input_shape=(last_layer_dim_shared,), activation=activation_fn))
+        assert len(shared_part) > 0, 'shared part should contain at least one layer'
+        assert shared_part[-1][0] == 'dense', 'The last layer in the shared part should be dense'
 
-                if batchnorm:
-                    shared_net.append(layers.BatchNormalization(trainable=shared_trainable))
-                shared_net.append(layers.Conv1D(layer_size, kernel_size=lookback, padding='same', activation=activation_fn, trainable=shared_trainable))
-                shared_net.append(layers.Dropout(dropout, trainable=shared_trainable))
+        for idx, layer in enumerate(shared_part[:-1]):
+            if isinstance(layer, tuple):
+                layer_type = layer[0]
+                if layer_type == 'lstm':
+                    nunits = layer[1]
+                    rseq = layer[2]
+                    self.shared_net.append(layers.LSTM(
+                        nunits, return_sequences=rseq, activation=activation_fn,
+                        recurrent_dropout=dropout,
+                        kernel_regularizer=tf.keras.regularizers.l1_l2(l1=1e-5, l2=1e-4),
+                        bias_regularizer=tf.keras.regularizers.l2(1e-4),
+                        trainable=shared_trainable
+                    ))
+                elif layer_type == 'bilstm':
+                    nunits = layer[1]
+                    rseq = layer[2]
+                    self.shared_net.append(layers.Bidirectional(layers.LSTM(
+                        nunits, return_sequences=rseq, activation=activation_fn,
+                        recurrent_dropout=dropout,
+                        kernel_regularizer=tf.keras.regularizers.l1_l2(l1=1e-5, l2=1e-4),
+                        bias_regularizer=tf.keras.regularizers.l2(1e-4),
+                        trainable=shared_trainable
+                    )))
+                elif layer_type == 'conv1d':
+                    nfilters = layer[1]
+                    kernel_size = layer[2]
+                    stride_size = layer[3]
+                    padding = layer[4]
+                    self.shared_net.append(layers.Conv1D(
+                        nfilters, kernel_size=kernel_size, strides=stride_size, padding=padding, activation=activation_fn,
+                        kernel_regularizer=tf.keras.regularizers.l1_l2(l1=1e-5, l2=1e-4),
+                        bias_regularizer=tf.keras.regularizers.l2(1e-4),
+                        trainable=shared_trainable
+                    ))
+                elif layer_type == 'dense':
+                    nhidden = layer[1]
+                    self.shared_net.append(layers.Dense(
+                        nhidden, activation=activation_fn,
+                        kernel_regularizer=tf.keras.regularizers.l1_l2(l1=1e-5, l2=1e-4),
+                        bias_regularizer=tf.keras.regularizers.l2(1e-4),
+                        trainable=shared_trainable
+                    ))
+                else:
+                    raise NotImplemented
 
-                #last_layer_dim_shared = layer_size
-            else:
-                assert isinstance(layer, dict), "Error: the net_arch list can only contain ints and dicts"
-                if 'pi' in layer:
-                    assert isinstance(layer['pi'], list), "Error: net_arch[-1]['pi'] must contain a list of integers."
-                    policy_only_layers = layer['pi']
+                # add batch normalization and dropout
 
-                if 'vf' in layer:
-                    assert isinstance(layer['vf'], list), "Error: net_arch[-1]['vf'] must contain a list of integers."
-                    value_only_layers = layer['vf']
-                break  # From here on the network splits up in policy and value network
+                self.shared_net_bn.append(layers.BatchNormalization())
+                self.shared_net_do.append(layers.Dropout(dropout))
+                self.shared_net_gn.append(layers.GaussianNoise(gn_std))
 
-        shared_net.append(layers.Flatten())
-        last_layer_dim_shared = layer_size * lookback
 
-        last_layer_dim_pi = last_layer_dim_shared
-        last_layer_dim_vf = last_layer_dim_shared
+        # last shared layer
+
+        self.last_shared_layers = []
+        self.last_shared_layers.append(layers.Flatten())
+        nhidden = shared_part[-1][1]
+        self.last_shared_layers.append(layers.Dense(
+            nhidden, activation=activation_fn,
+            kernel_regularizer=tf.keras.regularizers.l1_l2(l1=1e-5, l2=1e-4),
+            bias_regularizer=tf.keras.regularizers.l2(1e-4),
+            trainable=shared_trainable
+        ))
+
+        # add batch normalization and dropout
+
+        self.last_shared_bn = layers.BatchNormalization()
+        self.last_shared_gn = layers.GaussianNoise(gn_std)
+        self.last_shared_do = layers.Dropout(dropout)
+
+        # pi and vf streams
+
+        last_layer_dim_pi = nhidden
+        last_layer_dim_vf = nhidden
+
+        for idx, layer in enumerate(splitted_part):
+
+            if 'pi' in layer:
+                assert isinstance(layer['pi'], list), "Error: net_arch[-1]['pi'] must contain a list of integers."
+                policy_only_layers = layer['pi']
+
+            if 'vf' in layer:
+                assert isinstance(layer['vf'], list), "Error: net_arch[-1]['vf'] must contain a list of integers."
+                value_only_layers = layer['vf']
+
+            break
 
         # Build the non-shared part of the network
 
         for idx, (pi_layer_size, vf_layer_size) in enumerate(zip_longest(policy_only_layers, value_only_layers)):
             if pi_layer_size is not None:
                 assert isinstance(pi_layer_size, int), "Error: net_arch[-1]['pi'] must only contain integers."
-                if batchnorm:
-                    policy_net.append(layers.BatchNormalization(trainable=pi_trainable))
-                policy_net.append(layers.Dense(pi_layer_size, input_shape=(last_layer_dim_pi,), activation=activation_fn, trainable=pi_trainable))
+                self.policy_net.append(layers.Dense(
+                    pi_layer_size, input_shape=(last_layer_dim_pi,), activation=activation_fn, trainable=pi_trainable,
+                    kernel_regularizer=tf.keras.regularizers.l1_l2(l1=1e-5, l2=1e-4), bias_regularizer=tf.keras.regularizers.l2(1e-4),
+                ))
                 last_layer_dim_pi = pi_layer_size
+                self.policy_net_bn.append(layers.BatchNormalization())
 
             if vf_layer_size is not None:
                 assert isinstance(vf_layer_size, int), "Error: net_arch[-1]['vf'] must only contain integers."
-                if batchnorm:
-                    value_net.append(layers.BatchNormalization(trainable=vf_trainable))
-                value_net.append(layers.Dense(vf_layer_size, input_shape=(last_layer_dim_vf,), activation=activation_fn, trainable=vf_trainable))
+                self.value_net.append(layers.Dense(
+                    vf_layer_size, input_shape=(last_layer_dim_vf,), activation=activation_fn, trainable=vf_trainable,
+                    kernel_regularizer=tf.keras.regularizers.l1_l2(l1=1e-5, l2=1e-4), bias_regularizer=tf.keras.regularizers.l2(1e-4),
+                ))
                 last_layer_dim_vf = vf_layer_size
+                self.value_net_bn.append(layers.BatchNormalization())
 
-        # Save dim, used to create the distributions
+        # save dim, used to create the distributions
 
         self.latent_dim_pi = last_layer_dim_pi
         self.latent_dim_vf = last_layer_dim_vf
 
-        # Create networks
-        # If the list of layers is empty, the network will just act as an Identity module
+    def call(self, features, training=False):
 
-        self.shared_net = Sequential(shared_net)
-        self.policy_net = Sequential(policy_net)
-        self.value_net = Sequential(value_net)
+        # shared layers
 
-    def call(self, features):
-        """
-        :return: (tf.Tensor, tf.Tensor) latent_policy, latent_value of the specified network.
-            If all layers are shared, then ``latent_policy == latent_value``
-        """
-        shared_latent = self.shared_net(features)
-        return self.policy_net(shared_latent), self.value_net(shared_latent)
+        shared_latent = features
+        for l, bn, gn, do in zip(self.shared_net, self.shared_net_bn, self.shared_net_gn, self.shared_net_do):
+            shared_latent = bn(shared_latent, training & self.shared_trainable)
+            shared_latent = gn(shared_latent, training & self.shared_trainable)
+            shared_latent = l(shared_latent, training = training & self.shared_trainable)
+            shared_latent = do(shared_latent, training & self.shared_trainable)
+
+        # last shared
+
+        shared_latent = self.last_shared_bn(shared_latent, training = training & self.shared_trainable)
+        shared_latent = self.last_shared_gn(shared_latent, training & self.shared_trainable)
+        for l in self.last_shared_layers:
+            shared_latent = l(shared_latent)
+        shared_latent = self.last_shared_do(shared_latent, training = training & self.shared_trainable)
+
+        # pi layers
+
+        pi_latent = shared_latent
+        for l, bn in zip(self.policy_net, self.policy_net_bn):
+            pi_latent = bn(pi_latent, training & self.pi_trainable)
+            pi_latent = l(pi_latent)
+
+        # vf layers
+
+        vf_latent = shared_latent
+        for l, bn in zip(self.value_net, self.value_net_bn):
+            vf_latent = bn(vf_latent, training & self.vf_trainable)
+            vf_latent = l(vf_latent)
+
+        return pi_latent, vf_latent
+
+
+class LstmExtractor(Model):
+
+    def __init__(self, net_arch, activation_fn, shared_trainable=True, vf_trainable=True, pi_trainable=True,
+                 dropout=0.5, gn_std=0.01):
+        super(LstmExtractor, self).__init__()
+
+        self.shared_trainable = shared_trainable
+        self.vf_trainable = vf_trainable
+        self.pi_trainable = pi_trainable
+
+        self.shared_net, self.policy_net, self.value_net = [], [], []
+        self.shared_net_bn, self.policy_net_bn, self.value_net_bn = [], [], []
+        self.shared_net_do = []
+        policy_only_layers = []  # Layer sizes of the network that only belongs to the policy network
+        value_only_layers = []  # Layer sizes of the network that only belongs to the value network
+
+        # Iterate through the shared layers and build the shared parts of the network
+
+        shared_part = [layer for layer in net_arch if isinstance(layer, tuple)]
+        splitted_part = [layer for layer in net_arch if isinstance(layer, dict)]
+
+        assert len(shared_part) > 0, 'shared part should contain at least one layer'
+        assert shared_part[-1][0] == 'dense', 'The last layer in the shared part should be dense'
+
+        for idx, layer in enumerate(shared_part[:-1]):
+            if isinstance(layer, tuple):
+                layer_type = layer[0]
+                if layer_type == 'lstm':
+                    nunits = layer[1]
+                    rseq = layer[2]
+                    self.shared_net.append(layers.LSTM(
+                        nunits, return_sequences=rseq, activation=activation_fn,
+                        stateful=True, recurrent_dropout=dropout,
+                        kernel_regularizer=tf.keras.regularizers.l1_l2(l1=1e-5, l2=1e-4),
+                        bias_regularizer=tf.keras.regularizers.l2(1e-4),
+                        trainable=shared_trainable
+                    ))
+                elif layer_type == 'conv1d':
+                    nfilters = layer[1]
+                    kernel_size = layer[2]
+                    stride_size = layer[3]
+                    padding = layer[4]
+                    self.shared_net.append(layers.Conv1D(
+                        nfilters, kernel_size=kernel_size, strides=stride_size, padding=padding, activation=activation_fn,
+                        kernel_regularizer=tf.keras.regularizers.l1_l2(l1=1e-5, l2=1e-4),
+                        bias_regularizer=tf.keras.regularizers.l2(1e-4),
+                        trainable=shared_trainable
+                    ))
+                elif layer_type == 'dense':
+                    nhidden = layer[1]
+                    self.shared_net.append(layers.Dense(
+                        nhidden, activation=activation_fn,
+                        kernel_regularizer=tf.keras.regularizers.l1_l2(l1=1e-5, l2=1e-4),
+                        bias_regularizer=tf.keras.regularizers.l2(1e-4),
+                        trainable=shared_trainable
+                    ))
+                else:
+                    raise NotImplemented
+
+                # add batch normalization and dropout
+
+                self.shared_net_bn.append(layers.BatchNormalization())
+                self.shared_net_do.append(layers.Dropout(dropout))
+
+
+        # last shared layer
+
+        self.last_shared_layers = []
+        self.last_shared_layers.append(layers.Flatten())
+        nhidden = shared_part[-1][1]
+        self.last_shared_layers.append(layers.Dense(
+            nhidden, activation=activation_fn,
+            kernel_regularizer=tf.keras.regularizers.l1_l2(l1=1e-5, l2=1e-4),
+            bias_regularizer=tf.keras.regularizers.l2(1e-4),
+            trainable=shared_trainable
+        ))
+
+        # add batch normalization and dropout
+
+        self.last_shared_bn = layers.BatchNormalization()
+        self.last_shared_do = layers.Dropout(dropout)
+
+        # pi and vf streams
+
+        last_layer_dim_pi = nhidden
+        last_layer_dim_vf = nhidden
+
+        for idx, layer in enumerate(splitted_part):
+
+            if 'pi' in layer:
+                assert isinstance(layer['pi'], list), "Error: net_arch[-1]['pi'] must contain a list of integers."
+                policy_only_layers = layer['pi']
+
+            if 'vf' in layer:
+                assert isinstance(layer['vf'], list), "Error: net_arch[-1]['vf'] must contain a list of integers."
+                value_only_layers = layer['vf']
+
+            break
+
+        # Build the non-shared part of the network
+
+        for idx, (pi_layer_size, vf_layer_size) in enumerate(zip_longest(policy_only_layers, value_only_layers)):
+            if pi_layer_size is not None:
+                assert isinstance(pi_layer_size, int), "Error: net_arch[-1]['pi'] must only contain integers."
+                self.policy_net.append(layers.Dense(
+                    pi_layer_size, input_shape=(last_layer_dim_pi,), activation=activation_fn, trainable=pi_trainable,
+                    kernel_regularizer=tf.keras.regularizers.l1_l2(l1=1e-5, l2=1e-4), bias_regularizer=tf.keras.regularizers.l2(1e-4),
+                ))
+                last_layer_dim_pi = pi_layer_size
+                self.policy_net_bn.append(layers.BatchNormalization())
+
+            if vf_layer_size is not None:
+                assert isinstance(vf_layer_size, int), "Error: net_arch[-1]['vf'] must only contain integers."
+                self.value_net.append(layers.Dense(
+                    vf_layer_size, input_shape=(last_layer_dim_vf,), activation=activation_fn, trainable=vf_trainable,
+                    kernel_regularizer=tf.keras.regularizers.l1_l2(l1=1e-5, l2=1e-4), bias_regularizer=tf.keras.regularizers.l2(1e-4),
+                ))
+                last_layer_dim_vf = vf_layer_size
+                self.value_net_bn.append(layers.BatchNormalization())
+
+        # save dim, used to create the distributions
+
+        self.latent_dim_pi = last_layer_dim_pi
+        self.latent_dim_vf = last_layer_dim_vf
+
+        # create networks
+
+        #self.shared_net = Sequential(shared_net)
+        #self.policy_net = Sequential(policy_net)
+        #self.value_net = Sequential(value_net)
+
+        #self.bn = layers.BatchNormalization()
+        self.gn = layers.GaussianNoise(gn_std)
+        #self.do = layers.Dropout(dropout)
+
+    def reset_state(self):
+        for layer in self.shared_net:
+            if layer.name.startswith('lstm'):
+                layer.reset_states()
+
+    def call(self, features, training=False):
+
+        # batch normazliation and gaussian noice
+
+        #features = self.bn(features, training)
+        features = self.gn(features, training & self.shared_trainable)
+
+        # shared layers
+
+        shared_latent = features
+        for l, bn, do in zip(self.shared_net, self.shared_net_bn, self.shared_net_do):
+            shared_latent = bn(shared_latent, training & self.shared_trainable)
+            shared_latent = l(shared_latent, training = training & self.shared_trainable)
+            shared_latent = do(shared_latent, training & self.shared_trainable)
+
+        # last shared
+
+        shared_latent = self.last_shared_bn(shared_latent, training = training & self.shared_trainable)
+        for l in self.last_shared_layers:
+            shared_latent = l(shared_latent)
+        shared_latent = self.last_shared_do(shared_latent, training = training & self.shared_trainable)
+
+        # pi layers
+
+        pi_latent = shared_latent
+        for l, bn in zip(self.policy_net, self.policy_net_bn):
+            pi_latent = bn(pi_latent, training & self.pi_trainable)
+            pi_latent = l(pi_latent)
+
+        # vf layers
+
+        vf_latent = shared_latent
+        for l, bn in zip(self.value_net, self.value_net_bn):
+            vf_latent = bn(vf_latent, training & self.vf_trainable)
+            vf_latent = l(vf_latent)
+
+        #return self.policy_net(shared_latent), self.value_net(shared_latent)
+        return pi_latent, vf_latent

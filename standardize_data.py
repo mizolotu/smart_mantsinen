@@ -2,14 +2,10 @@ import os, pandas
 import os.path as osp
 import numpy as np
 
+from config import trajectory_dir, signal_dir
 from common.data_utils import load_signals, load_trajectory, update_signals
 
 if __name__ == '__main__':
-
-    # parameters
-
-    trajectory_dir = 'data/trajectory_examples'
-    signal_dir = 'data/signals'
 
     # load signals
 

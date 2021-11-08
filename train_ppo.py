@@ -8,9 +8,8 @@ from stable_baselines.ppo.ppod import PPOD as ppo
 from stable_baselines.ppo.policies import MlpPolicy
 
 from stable_baselines.common.vec_env.mevea_vec_env import MeveaVecEnv
-from common.data_utils import prepare_trajectories
+from common.data_utils import read_csv, read_json
 from config import *
-from itertools import cycle
 
 def make_env(env_class, *args):
     fn = lambda: env_class(*args)
@@ -29,26 +28,20 @@ if __name__ == '__main__':
         print('Start the server: python3 env_server.py')
         sleep(sleep_interval)
 
-    # prepare training data
+    # load waypoints and meta
 
-    trajectory_files = [osp.join(trajectory_dir, fpath) for fpath in os.listdir(trajectory_dir) if fpath.endswith('csv')]
-    bc_train, bc_val, waypoints, n_stay_max, last_dist_max = prepare_trajectories(
-        signal_dir,
-        trajectory_files,
-        n_waypoints=nwaypoints,
-        use_inputs=use_inputs,
-        use_outputs=use_outputs,
-        action_scale=action_scale,
-        lookback=lookback,
-        tstep=tstep
-    )
-    n_stay_max *= nsteps
+    wp_files = [osp.join(waypoints_dir, fpath) for fpath in os.listdir(waypoints_dir) if fpath.endswith('txt')]
+    waypoints = []
+    for i, wp in enumerate(wp_files):
+        waypoints.append(read_csv(waypoints_dir, f'wps{i+1}.txt'))
+    meta = read_json(dataset_dir, 'metainfo.json')
+    tr_waypoints = [wp for wp, wp_stage in zip(waypoints, meta['wp_stages']) if wp_stage == 'train']
+    tr_traj_sizes = [s for s, wp_stage in zip(meta['traj_sizes'], meta['wp_stages']) if wp_stage == 'train']
+    te_waypoints = [wp for wp, wp_stage in zip(waypoints, meta['wp_stages']) if wp_stage == 'test']
+    te_traj_sizes = [s for s, wp_stage in zip(meta['traj_sizes'], meta['wp_stages']) if wp_stage == 'test']
 
     # create environments
 
-    n = len(waypoints)
-    c = cycle(range(n))
-    wp_inds = [next(c) for _ in range(nenvs)]
     env_fns = [
         make_env(
             MantsinenBasic,
@@ -57,17 +50,38 @@ if __name__ == '__main__':
             model_dir,
             signal_dir,
             server,
-            waypoints[i],
+            tr_waypoints,
             nsteps,
             lookback,
+            obs_wp_freq,
             use_inputs,
             use_outputs,
             action_scale,
+            wp_size,
             tstep,
-            n_stay_max,
-            last_dist_max,
+            meta['n_stay_max'] * 9999,
             bonus
-        ) for i in wp_inds
+        ) for i in range(nenvs)
+    ] + [
+        make_env(
+            MantsinenBasic,
+            nenvs,
+            model_path,
+            model_dir,
+            signal_dir,
+            server,
+            te_waypoints,
+            nsteps,
+            lookback,
+            obs_wp_freq,
+            use_inputs,
+            use_outputs,
+            action_scale,
+            wp_size,
+            tstep,
+            meta['n_stay_max'] * 9999,
+            bonus
+        )
     ]
     env = MeveaVecEnv(env_fns)
 
@@ -77,11 +91,14 @@ if __name__ == '__main__':
     if not osp.isdir(chkp_dir):
         os.mkdir(chkp_dir)
 
-    model = ppo(MlpPolicy, env, policy_kwargs=dict(net_arch = [256, 256, dict(vf=[64, 64]), dict(pi=[64, 64])]), batch_size=batch_size,
+    model = ppo(MlpPolicy, env, n_env_train=nenvs, policy_kwargs=dict(net_arch = ppo_net_arch), batch_size=batch_size,
                 n_steps=nsteps, model_path=chkp_dir, log_path=log_dir, tensorboard_log='tensorboard_log', verbose=1)
 
     if not model.loaded:
-        model.pretrain(bc_train, data_val=bc_val, nepochs=npretrain)
+        bc_train = read_csv(dataset_dir, 'train.csv')
+        bc_val = read_csv(dataset_dir, 'test.csv')
+        model.pretrain(bc_train, bc_val, tr_traj_sizes, te_traj_sizes, tstep, nepochs=npretrain)
+        #model.pretrain_recurrent(bc_train, bc_val, tr_traj_sizes, te_traj_sizes, nepochs=npretrain)
         model.save(chkp_dir, 'first')
 
     # disable cuda

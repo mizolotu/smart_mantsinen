@@ -5,7 +5,7 @@ import numpy as np
 from common.data_utils import load_signals, save_trajectory, parse_conditional_signals, is_moving, is_acting
 from common.solver_utils import get_solver_path, start_solver, stop_solver
 from common.server_utils import is_server_running, is_backend_registered, post_signals, post_action, get_state
-from config import default_actions
+from config import default_actions, trajectory_dir, signal_dir
 
 from time import sleep
 
@@ -13,8 +13,6 @@ if __name__ == '__main__':
 
     # parameters
 
-    output_dir = 'data/trajectory_examples'
-    signal_dir = 'data/signals'
     sleep_interval = 3
 
     # process arguments
@@ -22,20 +20,20 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-m', '--model', help='File path to the model.', default='C:\\Users\\mevea\\MeveaModels\\Mantsinen\\Models\\Mantsinen300M\\300M_fixed.mvs')
     parser.add_argument('-s', '--server', help='Server URL.', default='http://127.0.0.1:5000')
-    parser.add_argument('-o', '--output', help='Output file.', default='trajectory4.csv')
+    parser.add_argument('-o', '--output', help='Output file.', default='trajectory11.csv')
     parser.add_argument('-d', '--debug', help='Debug.', default=False, type=bool)
     args = parser.parse_args()
 
     # check whether such file already exists
 
-    fnames = os.listdir(output_dir)
+    fnames = os.listdir(trajectory_dir)
     output_file = args.output
     if args.output in fnames:
         print('Trajectory file with name {0} already exists.'.format(args.output))
         go = input('Do you want to enter new name (y/n)?\n')
         if go == 'y':
             output_file = input('Enter new output file name:\n')
-    output = osp.join(output_dir, output_file)
+    output = osp.join(trajectory_dir, output_file)
 
     # check that server is running
 
@@ -80,15 +78,15 @@ if __name__ == '__main__':
     is_acting_list = []
     conditional_values = []
     timestamps = []
-    moving_and_acting = False
-    last_t_state = None
-    move_t_start = None
+    moving, acting = False, False
+    last_t_state, move_t_start = None, None
 
-    while not moving_and_acting:
+    while not (moving and acting):
         post_action(args.server, backend_id, None, conditional_values, next_simulation_time=0)
-        state, reward, conditional_values, t_state_real, t_state_simulation = get_state(args.server, backend_id, last_state_time=0)
-        moving_and_acting = is_moving(conditional_signals, conditional_values, t_state_simulation) and is_acting(signals, state, default_actions)
-        if moving_and_acting:
+        state, reward, conditional_values, t_state_real, t_state_simulation, _ = get_state(args.server, backend_id, last_state_time=0)
+        moving = is_moving(conditional_signals, conditional_values, t_state_simulation)
+        acting = is_acting(signals, state, default_actions)
+        if moving and acting:
             timestamps.append(t_state_simulation)
             states.append(state)
             rewards.append(reward)
@@ -101,7 +99,7 @@ if __name__ == '__main__':
     moving = True
     while moving:
         post_action(args.server, backend_id, None, conditional_values, next_simulation_time=0)
-        state, reward, conditional_values, t_state_real, t_state_simulation = get_state(args.server, backend_id, last_state_time=0)
+        state, reward, conditional_values, t_state_real, t_state_simulation, _ = get_state(args.server, backend_id, last_state_time=0)
         if state is not None and reward is not None and t_state_simulation is not None:
             moving = is_moving(conditional_signals, conditional_values, t_state_simulation)
             if moving:

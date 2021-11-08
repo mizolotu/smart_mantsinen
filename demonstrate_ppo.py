@@ -20,9 +20,9 @@ if __name__ == '__main__':
     # process arguments
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-w', '--waypoints', help='Text file with waypoints.', default='example_waypoints.txt')
+    parser.add_argument('-w', '--waypoints', help='Text file with waypoints.', default='data/waypoints/wps15.txt')
     parser.add_argument('-m', '--model', help='Model directory.', default='models/mevea/mantsinen/ppo')
-    parser.add_argument('-c', '--checkpoint', help='Checkpoint', default='best', choices=['first', 'last', 'best'])
+    parser.add_argument('-c', '--checkpoint', help='Checkpoint', default='first', choices=['first', 'last', 'best'])
     parser.add_argument('-v', '--video', help='Record video?', type=bool)
     args = parser.parse_args()
 
@@ -52,12 +52,13 @@ if __name__ == '__main__':
         waypoints,
         nsteps,
         lookback,
+        obs_wp_freq,
         use_inputs,
         use_outputs,
         action_scale,
+        wp_size,
         tstep,
         n_stay_max,
-        last_dist_max,
         bonus
     )]
     env = MeveaVecEnv(env_fns)
@@ -65,15 +66,18 @@ if __name__ == '__main__':
     # load model and run it in demo mode
 
     try:
-        model = ppo(policy, env, policy_kwargs=dict(net_arch=[256, 256, dict(vf=[64, 64]), dict(pi=[64, 64])]), batch_size=batch_size, n_steps=nsteps,
+        model = ppo(policy, env, 1, policy_kwargs=dict(net_arch=ppo_net_arch), batch_size=batch_size, n_steps=nsteps,
                     model_path=chkpt_dir, chkpt_name=args.checkpoint, tensorboard_log='tensorboard_log', verbose=1)
+        cp_name = osp.basename(args.checkpoint)
+        wp_name = osp.basename(args.waypoints)
+        img_fname = f"{wp_name.split('.txt')[0]}_{cp_name}.png"
+        img_fpath = osp.join(img_output, 'ppo', img_fname)
         if args.video:
-            cp_name = osp.basename(args.checkpoint)
-            video_fname = f"{args.trajectory.split('.csv')[0]}_{cp_name.split('.zip')[0]}.mp4"
+            video_fname = f"{wp_name.split('.txt')[0]}_{cp_name}.mp4"
             video_fpath = osp.join(video_output, 'ppo', video_fname)
             print(f'Recording to {video_fpath}')
         else:
             video_fpath = None
-        model.demo(video_file=video_fpath)
+        model.demo(img_file=img_fpath, video_file=video_fpath)
     except Exception as e:
         print(e)

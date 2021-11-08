@@ -3,7 +3,7 @@ import numpy as np
 import tensorflow.keras.layers as layers
 from tensorflow.keras.models import Sequential
 
-from stable_baselines.common.policies import BasePolicy, register_policy, MlpExtractor, Cnn1Extractor
+from stable_baselines.common.policies import BasePolicy, register_policy, MlpExtractor, Cnn1Extractor, LstmExtractor
 from stable_baselines.common.distributions import make_proba_distribution, DiagGaussianDistribution, CategoricalDistribution
 
 
@@ -21,9 +21,12 @@ class PPOPolicy(BasePolicy):
     :param log_std_init: (float) Initial value for the log standard deviation
     """
     def __init__(self, observation_space, action_space, learning_rate, net_arch=None, activation_fn=tf.nn.tanh, adam_epsilon=1e-5,
-                 ortho_init=True, log_std_init=0.0, shared_trainable=True, pi_trainable=True, vf_trainable=True):
+                 ortho_init=True, log_std_init=0.0, shared_trainable=True, pi_trainable=True, vf_trainable=True, batch_size=None, nsteps=None):
 
         super(PPOPolicy, self).__init__(observation_space, action_space)
+
+        self.batch_size = batch_size
+        self.nsteps = nsteps
 
         self.obs_dim = np.prod(self.observation_space.shape)
         self.shared_trainable = shared_trainable
@@ -52,7 +55,9 @@ class PPOPolicy(BasePolicy):
         #self.input_layer = Sequential(layers.Flatten(input_shape=(self.obs_dim,), dtype=tf.float32))
 
         self.input_layer = Sequential([
-            layers.Input(shape=self.observation_space.shape, dtype=tf.float32)
+            #layers.Input(shape=self.observation_space.shape, dtype=tf.float32)
+            layers.Input(batch_shape=(batch_size, *self.observation_space.shape), dtype=tf.float32)
+            #layers.Input(batch_shape=(batch_size, nsteps, np.prod(self.observation_space.shape)), dtype=tf.float32)
         ])
         #self.features_dim = self.obs_dim
         self.log_std_init = log_std_init
@@ -66,9 +71,8 @@ class PPOPolicy(BasePolicy):
 
     def _build(self, learning_rate):
 
-        #self.features_extractor = MlpExtractor(self.observation_space.shape[0], net_arch=self.net_arch, activation_fn=self.activation_fn, shared_trainable=self.shared_trainable, vf_trainable=self.vf_trainable, pi_trainable=self.pi_trainable)
-
-        self.features_extractor = Cnn1Extractor(self.observation_space.shape[0], net_arch=self.net_arch, activation_fn=self.activation_fn, shared_trainable=self.shared_trainable, vf_trainable=self.vf_trainable, pi_trainable=self.pi_trainable)
+        #self.features_extractor = LstmExtractor(net_arch=self.net_arch, activation_fn=self.activation_fn, shared_trainable=self.shared_trainable, vf_trainable=self.vf_trainable, pi_trainable=self.pi_trainable)
+        self.features_extractor = Cnn1Extractor(net_arch=self.net_arch, activation_fn=self.activation_fn, shared_trainable=self.shared_trainable, vf_trainable=self.vf_trainable, pi_trainable=self.pi_trainable)
 
         latent_dim_pi = self.features_extractor.latent_dim_pi
 
@@ -84,6 +88,7 @@ class PPOPolicy(BasePolicy):
         self.value_net.build()
 
         self.build(input_shape=(None, *self.observation_space.shape))
+        #self.build(input_shape=(self.batch_size, 1, np.prod(self.observation_space.shape)))
 
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate(1), epsilon=self.adam_epsilon)
 
@@ -94,16 +99,16 @@ class PPOPolicy(BasePolicy):
         self.load_weights(path)
 
     @tf.function
-    def call(self, obs, deterministic=False):
-        latent_pi, latent_vf = self._get_latent(obs)
+    def call(self, obs, deterministic=False, training=False):
+        latent_pi, latent_vf = self._get_latent(obs, training)
         value = self.value_net(latent_vf)
         action_logits, action, action_distribution = self._get_action_dist_from_latent(latent_pi, deterministic=deterministic)
         log_prob = action_distribution.log_prob(action)
         return action, value, log_prob, action_logits
 
-    def _get_latent(self, obs):
+    def _get_latent(self, obs, training):
         inputs = self.input_layer(obs)
-        latent_pi, latent_vf = self.features_extractor(inputs)
+        latent_pi, latent_vf = self.features_extractor(inputs, training)
         return latent_pi, latent_vf
 
     def _get_action_dist_from_latent(self, latent_pi, deterministic=False):
@@ -122,7 +127,7 @@ class PPOPolicy(BasePolicy):
         return tf.stop_gradient(action).numpy()
 
     @tf.function
-    def evaluate_actions(self, obs, action, deterministic=False):
+    def evaluate_actions(self, obs, action, deterministic=False, training=False):
         """
         Evaluate actions according to the current policy,
         given the observations.
@@ -133,14 +138,14 @@ class PPOPolicy(BasePolicy):
         :return: (th.Tensor, th.Tensor, th.Tensor) estimated value, log likelihood of taking those actions
             and entropy of the action distribution.
         """
-        latent_pi, latent_vf = self._get_latent(obs)
+        latent_pi, latent_vf = self._get_latent(obs, training=training)
         _, _, action_distribution = self._get_action_dist_from_latent(latent_pi, deterministic=deterministic)
         log_prob = action_distribution.log_prob(action)
         value = self.value_net(latent_vf)
         return value, log_prob, action_distribution.entropy()
 
     def value_forward(self, obs):
-        _, latent_vf = self._get_latent(obs)
+        _, latent_vf = self._get_latent(obs, training=False)
         return self.value_net(latent_vf)
 
 def demo_policy(obs_dim, act_dim, hiddens=[1024, 1024], lr=1e-3, adam_eps=1e-5, batchnorm=True, dropout=False):

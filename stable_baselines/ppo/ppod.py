@@ -1,4 +1,4 @@
-import os, shutil
+import os, shutil, psutil
 import os.path as osp
 
 import gym, pyautogui, cv2
@@ -21,50 +21,9 @@ from threading import Thread
 from collections import deque
 
 class PPOD(BaseRLModel):
-    """
-    Proximal Policy Optimization algorithm (PPO) (clip version)
 
-    Paper: https://arxiv.org/abs/1707.06347
-    Code: This implementation borrows code from OpenAI spinningup (https://github.com/openai/spinningup/)
-    https://github.com/ikostrikov/pytorch-a2c-ppo-acktr-gail and
-    and Stable Baselines (PPO2 from https://github.com/hill-a/stable-baselines)
-
-    Introduction to PPO: https://spinningup.openai.com/en/latest/algorithms/ppo.html
-
-    :param policy: (PPOPolicy or str) The policy model to use (MlpPolicy, CnnPolicy, ...)
-    :param env: (Gym environment or str) The environment to learn from (if registered in Gym, can be str)
-    :param learning_rate: (float or callable) The learning rate, it can be a function
-        of the current progress (from 1 to 0)
-    :param n_steps: (int) The number of steps to run for each environment per update
-        (i.e. batch size is n_steps * n_env where n_env is number of environment copies running in parallel)
-    :param batch_size: (int) Minibatch size
-    :param n_epochs: (int) Number of epoch when optimizing the surrogate loss
-    :param gamma: (float) Discount factor
-    :param gae_lambda: (float) Factor for trade-off of bias vs variance for Generalized Advantage Estimator
-    :param clip_range: (float or callable) Clipping parameter, it can be a function of the current progress
-        (from 1 to 0).
-    :param clip_range_vf: (float or callable) Clipping parameter for the value function,
-        it can be a function of the current progress (from 1 to 0).
-        This is a parameter specific to the OpenAI implementation. If None is passed (default),
-        no clipping will be done on the value function.
-        IMPORTANT: this clipping depends on the reward scaling.
-    :param ent_coef: (float) Entropy coefficient for the loss calculation
-    :param vf_coef: (float) Value function coefficient for the loss calculation
-    :param max_grad_norm: (float) The maximum value for the gradient clipping
-    :param target_kl: (float) Limit the KL divergence between updates,
-        because the clipping is not enough to prevent large update
-        see issue #213 (cf https://github.com/hill-a/stable-baselines/issues/213)
-        By default, there is no limit on the kl div.
-    :param tensorboard_log: (str) the log location for tensorboard (if None, no logging)
-    :param create_eval_env: (bool) Whether to create a second environment that will be
-        used for evaluating the agent periodically. (Only available when passing string for the environment)
-    :param policy_kwargs: (dict) additional arguments to be passed to the policy on creation
-    :param verbose: (int) the verbosity level: 0 none, 1 training information, 2 tensorflow debug
-    :param seed: (int) Seed for the pseudo random generators
-    :param _init_setup_model: (bool) Whether or not to build the network at the creation of the instance
-    """
-    def __init__(self, policy, env, learning_rate=1e-4,
-                 n_steps=2048, batch_size=64, n_epochs=16,
+    def __init__(self, policy, env, n_env_train, learning_rate=2.5e-4,
+                 n_steps=2048, batch_size=64, n_epochs=32,
                  gamma=0.99, gae_lambda=0.95, clip_range=0.1, clip_range_vf=None,
                  ent_coef=0.0, vf_coef=0.5, max_grad_norm=0.5,
                  target_kl=None, tensorboard_log=None, create_eval_env=False,
@@ -72,6 +31,8 @@ class PPOD(BaseRLModel):
                  _init_setup_model=True, model_path=None, log_path=None, chkpt_name=None):
 
         super(PPOD, self).__init__(policy, env, PPOPolicy, policy_kwargs=policy_kwargs, verbose=verbose, create_eval_env=create_eval_env, support_multi_env=True, seed=seed)
+
+        self.n_envs_train = n_env_train
 
         self.learning_rate = learning_rate
         self.batch_size = batch_size
@@ -135,10 +96,8 @@ class PPOD(BaseRLModel):
         # TODO: preprocessing: one hot vector for obs discrete
         state_dim = np.prod(self.observation_space.shape)
         if isinstance(self.action_space, spaces.Box):
-            # Action is a 1D vector
             action_dim = self.action_space.shape[0]
         elif isinstance(self.action_space, spaces.Discrete):
-            # Action is a scalar
             action_dim = 1
 
         # TODO: different seed for each env when n_envs > 1
@@ -165,13 +124,13 @@ class PPOD(BaseRLModel):
 
         # rl policy
 
-        self.policy = self.policy_class(self.observation_space, self.action_space, self.learning_rate, **self.policy_kwargs, shared_trainable=False)
+        #self.policy = self.policy_class(
+        #    self.observation_space, self.action_space, self.learning_rate, **self.policy_kwargs, shared_trainable=False, batch_size=self.n_envs_train
+        #)
+        self.policy = self.policy_class(
+            self.observation_space, self.action_space, self.learning_rate, **self.policy_kwargs, shared_trainable=False
+        )
         self.policy.summary()
-
-        # sl policy
-
-        self.pretrain_policy = self.policy_class(self.observation_space, self.action_space, self.learning_rate, **self.policy_kwargs, pi_trainable=False, vf_trainable=False)
-        self.pretrain_policy.summary()
 
         policy_loaded = False
         if model_path is not None:
@@ -182,7 +141,7 @@ class PPOD(BaseRLModel):
             except Exception as e:
                 print(e)
 
-        self.rollout_buffer = RolloutBuffer(self.n_steps, state_dim, action_dim, gamma=self.gamma, gae_lambda=self.gae_lambda, n_envs=self.n_envs)
+        self.rollout_buffer = RolloutBuffer(self.n_steps, state_dim, action_dim, gamma=self.gamma, gae_lambda=self.gae_lambda, n_envs=self.n_envs_train)
 
         self.clip_range = get_schedule_fn(self.clip_range)
         if self.clip_range_vf is not None:
@@ -216,64 +175,25 @@ class PPOD(BaseRLModel):
                 self.model_dirs.append(osp.abspath(osp.join(env_i_dir, *basename[::-1])))
 
     def predict(self, observation, state=None, mask=None, deterministic=False):
-        """
-        Get the model's action from an observation
 
-        :param observation: (np.ndarray) the input observation
-        :param state: (np.ndarray) The last states (can be None, used in recurrent policies)
-        :param mask: (np.ndarray) The last masks (can be None, used in recurrent policies)
-        :param deterministic: (bool) Whether or not to return deterministic actions.
-        :return: (np.ndarray, np.ndarray) the model's action and the next state (used in recurrent policies)
-        """
         clipped_actions = self.policy.actor_forward(observation, deterministic=deterministic)
-        #clipped_actions = self.policy.actor_forward(np.array(observation).reshape(1, -1), deterministic=deterministic)
         if isinstance(self.action_space, gym.spaces.Box):
             clipped_actions = np.clip(clipped_actions, self.action_space.low, self.action_space.high)
         return clipped_actions
 
-    def collect_rollouts_(self, env, rollout_buffer, n_rollout_steps=256, callback=None, obs=None):
-
-        n_steps = 0
-        rollout_buffer.reset()
-        rewards_ = []
-
-        while n_steps < n_rollout_steps:
-            actions, values, log_probs, _ = self.policy.call(obs)
-            actions = actions.numpy()
-
-            # Rescale and perform action
-
-            clipped_actions = actions
-
-            # Clip the actions to avoid out of bound error
-
-            if isinstance(self.action_space, gym.spaces.Box):
-                clipped_actions = np.clip(actions, self.action_space.low, self.action_space.high)
-            new_obs, rewards, dones, infos = env.step(clipped_actions)
-            rewards_.append(rewards)
-            self._update_info_buffer(infos)
-            n_steps += 1
-            if isinstance(self.action_space, gym.spaces.Discrete):
-                # Reshape in case of discrete action
-                actions = actions.reshape(-1, 1)
-            rollout_buffer.add(obs.reshape(self.n_envs, -1), actions, rewards, dones, values, log_probs)
-            obs = new_obs
-
-        rollout_buffer.compute_returns_and_advantage(values, dones=dones)
-        self._update_reward_buffer(rewards_)
-
-        return obs
-
-    def _start(self, headless=False, sleep_interval=1):
-        self.backend_procs = []
-        self.start_times = []
+    def _start(self, env_ids, headless=False, sleep_interval=1):
+        self.backend_procs = [None for _ in range(len(env_ids))]
+        self.start_times = [time() for _ in range(len(env_ids))]
         self.is_solver_starting = True
-        for mvs, server in zip(self.model_dirs, self.server):
+        for i, env_idx in enumerate(env_ids):
+            mvs = self.model_dirs[env_idx]
+            server = self.server[env_idx]
             proc = start_solver(self.solverpath, mvs, headless=headless)
-            self.backend_procs.append(proc)
+            self.backend_procs[i] = proc
             while not is_backend_registered(server, proc.pid):
                 sleep(sleep_interval)
-            self.start_times.append(time())
+            self.start_times[i] = time()
+            self.env.set_attr('id', [proc.pid], indices=[env_idx])
         self.is_solver_starting = False
 
     def record(self, video_file, sleep_interval=0.04, x=210, y=90, width=755, height=400):
@@ -289,41 +209,41 @@ class PPOD(BaseRLModel):
         cv2.destroyAllWindows()
         out.release()
 
-    def _run_one(self, env_idx, mb_obs, mb_actions, mb_values, mb_neglogpacs, mb_dones, mb_rewards, last_values, deterministic=False, video_file=None,
-                 sleep_interval=1, delay_interval=2, record_freq=20):
+    def _run_one(self, env_count, env_idx, mb_obs, mb_actions, mb_values, mb_neglogpacs, mb_dones, mb_rewards, last_values, deterministic=False,
+                 img_file=None, video_file=None, headless=False, sleep_interval=1, delay_interval=2, record_freq=20, img_freq=512):
 
         # sleep to prevent pressure bug
 
         sleep(delay_interval)
 
         # reset env
-
-        #print(f'Reseting {env_idx}')
-        #print(f'In {env_idx}, time between register and reset: {time() - self.start_times[env_idx]}')
         obs = self.env.reset_one(env_idx)
         done = False
-        #print(f'Solver {env_idx} has been reset')
 
-        if video_file is not None:
+        if video_file is not None or img_file is not None:
             width = 755
             height = 400
             x = 210
             y = 90
             screen_size = pyautogui.Size(width, height)
-            fourcc = cv2.VideoWriter_fourcc(*"MP4V")
-            out = cv2.VideoWriter(video_file, fourcc, 20.0, (screen_size))
 
+            if img_file is not None:
+                shots = []
+
+            if video_file is not None:
+                fourcc = cv2.VideoWriter_fourcc(*"MP4V")
+                out = cv2.VideoWriter(video_file, fourcc, 20.0, (screen_size))
         for step in range(self.n_steps):
 
             obs = obs.reshape(1, *obs.shape)
             actions, values, log_probs, _ = self.policy.call(obs, deterministic=deterministic)
             actions = actions.numpy()
 
-            mb_obs[env_idx].append(obs[0])
-            mb_actions[env_idx].append(actions[0])
-            mb_values[env_idx].append(values[0])
-            mb_neglogpacs[env_idx].append(log_probs[0])
-            mb_dones[env_idx].append(done)
+            mb_obs[env_count].append(obs[0])
+            mb_actions[env_count].append(actions[0])
+            mb_values[env_count].append(values[0])
+            mb_neglogpacs[env_count].append(log_probs[0])
+            mb_dones[env_count].append(done)
 
             # Rescale and perform action
 
@@ -338,7 +258,7 @@ class PPOD(BaseRLModel):
 
             obs, reward, done, info = self.env.step_one(env_idx, clipped_actions)
 
-            mb_rewards[env_idx].append(reward)
+            mb_rewards[env_count].append(reward)
 
             if video_file is not None and (step % record_freq) == 0:
                 img = pyautogui.screenshot(region=(x, y, width, height))
@@ -346,13 +266,13 @@ class PPOD(BaseRLModel):
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 out.write(frame)
 
+            if img_file is not None and (step == 0 or (step + 1) % img_freq == 0):
+                img = pyautogui.screenshot(region=(x, y, width, height))
+                shots.append(cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR))
+
             # reset if done
 
             if done:
-
-                if video_file is not None:
-                    cv2.destroyAllWindows()
-                    out.release()
 
                 #print(f'Env {env_idx} is done')
                 stop_solver(self.backend_procs[env_idx])
@@ -361,7 +281,7 @@ class PPOD(BaseRLModel):
                 while self.is_solver_starting:
                     sleep(sleep_interval)
                 self.is_solver_starting = True
-                proc = start_solver(self.solverpath, self.model_dirs[env_idx], headless=False)
+                proc = start_solver(self.solverpath, self.model_dirs[env_idx], headless)
                 self.backend_procs[env_idx] = proc
                 while not is_backend_registered(self.server[env_idx], proc.pid):
                     sleep(sleep_interval)
@@ -373,19 +293,27 @@ class PPOD(BaseRLModel):
 
         obs = obs.reshape(1, *obs.shape)
         values = self.policy.value_forward(obs)
-        last_values[env_idx] = values[0]
+        last_values[env_count] = values[0]
 
-        stop_solver(self.backend_procs[env_idx])
-        delete_id(self.server[env_idx], self.backend_procs[env_idx].pid)
+        if video_file is not None:
+            cv2.destroyAllWindows()
+            out.release()
 
-    def collect_rollouts(self, rollout_buffer, deterministic=False, nenvs=None, video_file=None):
+        if img_file is not None:
+            shots = cv2.vconcat(shots)
+            cv2.imwrite(img_file, shots)
 
-        if nenvs is None:
-            nenvs = self.n_envs
+        #stop_solver(self.backend_procs[env_idx])
+        #delete_id(self.server[env_idx], self.backend_procs[env_idx].pid)
+
+    def collect_rollouts(self, rollout_buffer, headless=False, deterministic=False, env_ids=None, img_file=None, video_file=None, update_reward=False):
+
+        if env_ids is None:
+            env_ids = np.arange(self.n_envs_train)
+        nenvs = len(env_ids)
 
         rollout_buffer.reset()
-        self._start(headless=False)
-        self.env.set_attr('id', [proc.pid for proc in self.backend_procs])
+        self._start(env_ids, headless)
 
         mb_obs = [[] for _ in range(nenvs)]
         mb_actions = [[] for _ in range(nenvs)]
@@ -396,12 +324,17 @@ class PPOD(BaseRLModel):
         last_values = [None for _ in range(nenvs)]
 
         threads = []
-        for env_idx in range(nenvs):
-            th = Thread(target=self._run_one, args=(env_idx, mb_obs, mb_actions, mb_values, mb_neglogpacs, mb_dones, mb_rewards, last_values, deterministic, video_file))
+        for env_count, env_idx in enumerate(env_ids):
+            th = Thread(target=self._run_one, args=(env_count, env_idx, mb_obs, mb_actions, mb_values, mb_neglogpacs, mb_dones,
+                                                    mb_rewards, last_values, deterministic, img_file, video_file, headless))
             th.start()
             threads.append(th)
         for th in threads:
             th.join()
+
+        for env_count, env_idx in enumerate(env_ids):
+            stop_solver(self.backend_procs[env_count])
+            delete_id(self.server[env_idx], self.backend_procs[env_count].pid)
 
         mb_obs = [np.stack([mb_obs[idx][step] for idx in range(nenvs)]) for step in range(self.n_steps)]
         mb_rewards = [np.hstack([mb_rewards[idx][step] for idx in range(nenvs)]) for step in range(self.n_steps)]
@@ -414,7 +347,10 @@ class PPOD(BaseRLModel):
         for obs, actions, rewards, dones, values, log_probs in zip(mb_obs, mb_actions, mb_rewards, mb_dones, mb_values, mb_neglogpacs):
             rollout_buffer.add(obs.reshape(nenvs, -1), actions, rewards, dones, values, log_probs)
         rollout_buffer.compute_returns_and_advantage(last_values, dones=mb_dones[-1])
-        self._update_reward_buffer(mb_rewards)
+        if update_reward:
+            self._update_reward_buffer(mb_rewards)
+        else:
+            print(f'Reward: {np.mean(mb_rewards)}')
 
         return obs
 
@@ -441,10 +377,6 @@ class PPOD(BaseRLModel):
         if clip_range_vf is None:
             values_pred = values
         else:
-
-            # Clip the different between old and new value
-            # NOTE: this depends on the reward scaling
-
             values_pred = old_values + tf.clip_by_value(values - old_values, -clip_range_vf, clip_range_vf)
 
         # Value loss using the TD(gae_lambda) target
@@ -481,7 +413,7 @@ class PPOD(BaseRLModel):
 
                 with tf.GradientTape() as tape:
                     tape.watch(self.policy.trainable_variables)
-                    values, log_prob, entropy = self.policy.evaluate_actions(obs, action)
+                    values, log_prob, entropy = self.policy.evaluate_actions(obs, action, training=True)
 
                     # Flatten
 
@@ -527,44 +459,101 @@ class PPOD(BaseRLModel):
         if hasattr(self.policy, 'log_std'):
             logger.logkv("std", tf.exp(self.policy.log_std).numpy().mean())
 
-    def pretrain(self, data_tr, data_val, nepochs=10000, patience=100):
+    def pretrain(self, data_tr, data_val, data_tr_lens, data_val_lens, tstep, nepochs=10000, patience=100):
 
-        obs_dim = np.prod(self.observation_space.shape)
+        self.pretrain_policy = self.policy_class(
+            self.observation_space, self.action_space, self.learning_rate,  **self.policy_kwargs, pi_trainable=False, vf_trainable=False
+        )
+        self.pretrain_policy.summary()
+
+        obs_lookback = self.observation_space.shape[0]
+        obs_features = self.observation_space.shape[1]
         act_dim = self.action_space.shape[0]
 
-        ntrain = data_tr.shape[0]
-        nval = data_val.shape[0]
-        nbatches_tr = ntrain // self.batch_size
-        nbatches_val = nval // self.batch_size
+        assert data_tr.shape[1] == obs_features + act_dim + 1, 'Incorrect training data shape'
+        assert data_val.shape[1] == obs_features + act_dim + 1, 'Incorrect validation data shape'
+
+        ntrain = len(data_tr_lens)
+        nval = len(data_val_lens)
+        print(f'Training on {ntrain} trajectories, validating on {nval}')
+
+        # training batches
+
+        x_tr, y_tr = [], []
+        nbatches_tr = 0
+        idx_start = 0
+        batch_idx = 0
+        for i, l in enumerate(data_tr_lens):
+            idx = np.arange(idx_start, idx_start + l)
+            expert_obs, expert_actions, expert_action_timestamps = data_tr[idx, :obs_features], data_tr[idx, obs_features:obs_features + act_dim], data_tr[idx, obs_features + act_dim]
+            t = np.arange(expert_action_timestamps[0], expert_action_timestamps[-1], tstep)
+            n = len(t)
+            nbatches_tr += n
+            x_tr.append(np.zeros((obs_lookback + n - 1, obs_features)))
+            y_tr.append(np.zeros((n, act_dim)))
+            for j in range(obs_features):
+                x_tr[-1][obs_lookback - 1:, j] = np.interp(t, expert_action_timestamps, expert_obs[:, j])
+            for j in range(act_dim):
+                y_tr[-1][:, j] = np.interp(t, expert_action_timestamps, expert_actions[:, j])
+            batch_idx += 1
+            idx_start = idx_start + l
+
+        # validation batches
+
+        x_val, y_val = [], []
+        nbatches_val = 0
+        idx_start = 0
+        batch_idx = 0
+        for i, l in enumerate(data_val_lens):
+            idx = np.arange(idx_start, idx_start + l)
+            expert_obs, expert_actions, expert_action_timestamps = data_val[idx, :obs_features], data_val[idx, obs_features:obs_features + act_dim], data_val[idx, obs_features + act_dim]
+            t = np.arange(expert_action_timestamps[0], expert_action_timestamps[-1], tstep)
+            n = len(t)
+            nbatches_val += n
+            x_val.append(np.zeros((obs_lookback + n - 1, obs_features)))
+            y_val.append(np.zeros((n, act_dim)))
+            for j in range(obs_features):
+                x_val[-1][obs_lookback - 1:, j] = np.interp(t, expert_action_timestamps, expert_obs[:, j])
+            for j in range(act_dim):
+                y_val[-1][:, j] = np.interp(t, expert_action_timestamps, expert_actions[:, j])
+            batch_idx += 1
+            idx_start = idx_start + l
+
+        nbatches_tr = nbatches_tr // self.batch_size
+        nbatches_val = nbatches_val // self.batch_size
+
+        print(f'Number of training batches: {nbatches_tr}, number of validation batches: {nbatches_val}')
 
         val_losses = deque(maxlen=10)
         patience_count = 0
         val_loss_min = np.inf
         best_weights = None
 
+        def generate_batch(x_list, y_list):
+            n = len(x_list)
+            x = np.zeros((self.batch_size, obs_lookback, obs_features))
+            y = np.zeros((self.batch_size, act_dim))
+            for i in range(self.batch_size):
+                traj_idx = np.random.choice(n)
+                l = x_list[traj_idx].shape[0] - obs_lookback + 1
+                idx = np.random.choice(l)
+                x[i, :, :] = x_list[traj_idx][idx : idx + obs_lookback, :]
+                y[i, :] = y_list[traj_idx][idx, :]
+            return x, y
+
         for epoch in range(nepochs):
 
             train_loss = 0.0
-
-            for _ in range(nbatches_tr):
-
-                idx = np.random.choice(ntrain, self.batch_size)
-                expert_obs, expert_actions = data_tr[idx, :obs_dim], data_tr[idx, obs_dim:obs_dim + act_dim]
-
-                expert_obs = expert_obs.reshape(self.batch_size, *self.observation_space.shape)
-
-                if isinstance(self.action_space, spaces.Discrete):
-                    actions_ = expert_actions[:, 0]
-                elif isinstance(self.action_space, spaces.Box):
-                    actions_ = expert_actions
-
+            for i in range(nbatches_tr):
+                #print(f'{i}/{nbatches_tr}')
+                x, y = generate_batch(x_tr, y_tr)
                 with tf.GradientTape() as tape:
                     tape.watch(self.pretrain_policy.trainable_variables)
-                    actions, values, log_probs, action_logits = self.pretrain_policy.call(expert_obs)
+                    actions, values, log_probs, action_logits = self.pretrain_policy.call(x, training=True)
                     if isinstance(self.action_space, spaces.Discrete):
-                        loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=actions_, logits=action_logits))
+                        loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y, logits=action_logits))
                     elif isinstance(self.action_space, spaces.Box):
-                        loss = tf.reduce_mean(tf.square(actions - actions_))
+                        loss = tf.reduce_mean(tf.square(actions - y))
                 train_loss += loss
 
                 # Optimization step
@@ -578,22 +567,12 @@ class PPOD(BaseRLModel):
             val_loss = 0.0
 
             for _ in range(nbatches_val):
-
-                idx = np.random.choice(nval, self.batch_size)
-                expert_obs, expert_actions = data_val[idx, :obs_dim], data_val[idx, obs_dim:obs_dim + act_dim]
-
-                expert_obs = expert_obs.reshape(self.batch_size, *self.observation_space.shape)
-
+                x, y = generate_batch(x_val, y_val)
+                actions, values, log_probs, action_logits = self.pretrain_policy.call(x)
                 if isinstance(self.action_space, spaces.Discrete):
-                    actions_ = expert_actions[:, 0]
+                    loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y, logits=action_logits))
                 elif isinstance(self.action_space, spaces.Box):
-                    actions_ = expert_actions
-
-                actions, values, log_probs, action_logits = self.pretrain_policy.call(expert_obs)
-                if isinstance(self.action_space, spaces.Discrete):
-                    loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=actions_, logits=action_logits))
-                elif isinstance(self.action_space, spaces.Box):
-                    loss = tf.reduce_mean(tf.square(actions - actions_))
+                    loss = tf.reduce_mean(tf.square(actions - y))
                 val_loss += loss
 
             val_losses.append(val_loss / nbatches_val)
@@ -604,6 +583,118 @@ class PPOD(BaseRLModel):
                 val_loss_min = np.mean(val_losses)
                 patience_count = 0
                 best_weights = self.pretrain_policy.get_weights()
+            else:
+                patience_count += 1
+                if patience_count >= patience:
+                    self.policy.set_weights(best_weights)
+                    print(f'Pretraining has finished with the minimum loss: {val_loss_min}')
+                    break
+
+    def pretrain_recurrent(self, data_tr, data_val, data_tr_lens, data_val_lens, nepochs=10000, patience=100):
+
+        obs_dim = np.prod(self.observation_space.shape)
+        act_dim = self.action_space.shape[0]
+
+        ntrain = len(data_tr_lens)
+        nval = len(data_val_lens)
+        print(f'Training on {ntrain} samples, validating on {nval} samples:')
+
+        # batches
+
+        tr_traj_len_max = np.max(data_tr_lens)
+        nbatches_tr = np.ceil(tr_traj_len_max / self.batch_size)
+        val_traj_len_max = np.max(data_val_lens)
+        nbatches_val = np.ceil(val_traj_len_max / self.batch_size)
+
+        # model
+
+        self.tr_policy = self.policy_class(self.observation_space, self.action_space, self.learning_rate, **self.policy_kwargs, pi_trainable=False, vf_trainable=False, batch_size=ntrain, nsteps=self.batch_size)
+        self.val_policy = self.policy_class(self.observation_space, self.action_space, self.learning_rate, **self.policy_kwargs, pi_trainable=False, vf_trainable=False, batch_size=nval, nsteps=self.batch_size)
+
+        # training batches
+
+        x_tr = np.zeros((ntrain, nbatches_tr * self.batch_size, obs_dim))
+        y_tr = np.zeros((ntrain, nbatches_val * self.batch_size, act_dim))
+        idx_start = 0
+        batch_idx = 0
+        for l in data_tr_lens:
+            idx = np.arange(idx_start, idx_start + l)
+            expert_obs, expert_actions = data_tr[idx, :obs_dim], data_tr[idx, obs_dim:obs_dim + act_dim]
+            x_tr[batch_idx, :len(idx), :] = expert_obs
+            y_tr[batch_idx, :len(idx), :] = expert_actions
+            batch_idx += 1
+            idx_start = idx_start + l
+
+        # validation batches
+
+        x_val = np.zeros((nval, val_traj_len_max, obs_dim))
+        y_val = np.zeros((nval, val_traj_len_max, act_dim))
+        idx_start = 0
+        batch_idx = 0
+        for l in data_val_lens:
+            idx = np.arange(idx_start, idx_start + l)
+            expert_obs, expert_actions = data_val[idx, :obs_dim], data_val[idx, obs_dim:obs_dim + act_dim]
+            x_val[batch_idx, :len(idx), :] = expert_obs
+            y_val[batch_idx, :len(idx), :] = expert_actions
+            batch_idx += 1
+            idx_start = idx_start + l
+
+        # early stoping init
+
+        val_losses = deque(maxlen=10)
+        patience_count = 0
+        val_loss_min = np.inf
+        best_weights = None
+
+        # main loop
+
+        for epoch in range(nepochs):
+
+            # training
+
+            train_loss = 0.0
+            for i in range(nbatches_tr):
+                x, y = x_tr[:, i*self.batch_size:(i+1)*self.batch_size, :], y_tr[:, i, :]
+                with tf.GradientTape() as tape:
+                    tape.watch(self.tr_policy.trainable_variables)
+                    actions, values, log_probs, action_logits = self.tr_policy.call(x, training=True)
+                    loss = tf.reduce_mean(tf.square(actions - y))
+                train_loss += loss
+
+                # Optimization step
+
+                gradients = tape.gradient(loss, self.tr_policy.trainable_variables)
+
+                # Clip grad norm
+
+                self.tr_policy.optimizer.apply_gradients(zip(gradients, self.tr_policy.trainable_variables))
+
+            self.tr_policy.features_extractor.reset_state()
+
+            # transfer weights
+
+            self.val_policy.set_weights(self.tr_policy.get_weights())
+
+            # validation
+
+            val_loss = 0.0
+            for i in range(val_traj_len_max):
+                x, y = x_val[:, i:i + 1, :], y_val[:, i, :]
+                actions, values, log_probs, action_logits = self.val_policy.call(x)
+                loss = tf.reduce_mean(tf.square(actions - y))
+                val_loss += loss
+
+            self.val_policy.features_extractor.reset_state()
+
+            val_losses.append(val_loss / (nval * val_traj_len_max))
+
+            print(f'At epoch {epoch + 1}/{nepochs}, train loss is {train_loss / (ntrain * tr_traj_len_max)}, '
+                  f'validation loss is {val_loss / (nval * val_traj_len_max)}, patience is {patience_count + 1}/{patience}')
+
+            if np.mean(val_losses) < val_loss_min:
+                val_loss_min = np.mean(val_losses)
+                patience_count = 0
+                best_weights = self.tr_policy.get_weights()
             else:
                 patience_count += 1
                 if patience_count >= patience:
@@ -641,6 +732,7 @@ class PPOD(BaseRLModel):
             "observation_space": self.observation_space,
             "action_space": self.action_space,
             "n_envs": self.n_envs,
+            "n_envs_train": self.n_envs_train,
             "seed": self.seed,
             "policy_kwargs": self.policy_kwargs
         }
@@ -663,7 +755,7 @@ class PPOD(BaseRLModel):
         w_path = osp.join(path, name, 'model')
         return data, w_path
 
-    def learn(self, total_timesteps, callback=None, log_interval=1, eval_env=None, eval_freq=-1, n_eval_episodes=5, tb_log_name="PPO", reset_num_timesteps=True):
+    def learn(self, total_timesteps, callback=None, log_interval=1, eval_env=None, eval_freq=1, tb_log_name="PPO", reset_num_timesteps=True):
 
         timesteps_since_eval, iteration, evaluations, obs, eval_env = self._setup_learn(eval_env, reset_env=False)
         iteration += self.iteration_start
@@ -673,18 +765,20 @@ class PPOD(BaseRLModel):
 
         while self.num_timesteps < total_timesteps:
 
-            if callback is not None:
-                # Only stop training if return value is False, not when it is None.
-                if callback(locals(), globals()) is False:
-                    break
-
-            obs = self.collect_rollouts(self.rollout_buffer)
+            self.collect_rollouts(self.rollout_buffer, env_ids=np.arange(self.n_envs_train), headless=True, update_reward=False)
             iteration += 1
-            self.num_timesteps += self.n_steps * self.n_envs
-            timesteps_since_eval += self.n_steps * self.n_envs
-            self._update_current_progress(self.num_timesteps, total_timesteps)
 
-            # Display training infos
+            self.num_timesteps += self.n_steps * self.n_envs_train
+            timesteps_since_eval += self.n_steps * self.n_envs_train
+            self._update_current_progress(self.num_timesteps, total_timesteps)
+            self.train(self.n_epochs, batch_size=self.batch_size)
+
+            # Evaluate the agent
+
+            if iteration == 1 or iteration % eval_freq == 0:
+                _ = self.collect_rollouts(self.rollout_buffer, deterministic=True, env_ids=np.arange(self.n_envs_train, self.n_envs), update_reward=True)
+
+            # Display learning info
 
             if self.verbose >= 1 and log_interval is not None and iteration % log_interval == 0:
                 if len(self.ep_reward_buffer) > 0:
@@ -703,12 +797,6 @@ class PPOD(BaseRLModel):
                         print(f'New best reward: {self.reward_max}')
                         self.save(self.model_path, 'best')
 
-            self.train(self.n_epochs, batch_size=self.batch_size)
-
-            # Evaluate the agent
-
-            timesteps_since_eval = self._eval_policy(eval_freq, eval_env, n_eval_episodes, timesteps_since_eval, deterministic=True)
-
             # For tensorboard integration
 
             if self.tb_writer is not None:
@@ -718,8 +806,8 @@ class PPOD(BaseRLModel):
 
         return self
 
-    def demo(self, ntests=1, video_file=None):
+    def demo(self, ntests=1, img_file=None, video_file=None):
         self.ep_reward_buffer = deque(maxlen=ntests)
         for test in range(ntests):
-            _ = self.collect_rollouts(self.rollout_buffer, deterministic=True, nenvs=1, video_file=video_file)
+            _ = self.collect_rollouts(self.rollout_buffer, deterministic=True, env_ids=[0], img_file=img_file, video_file=video_file, update_reward=True)
         print(f'Reward: {self.safe_mean(self.ep_reward_buffer)}')
