@@ -55,10 +55,10 @@ if __name__ == '__main__':
         t = np.arange(expert_action_timestamps[0], expert_action_timestamps[-1], tstep)
         n = len(t)
         nbatches_tr += n
-        x_tr.append(np.zeros((lookback + n - 1, obs_features)))
+        x_tr.append(np.zeros((n, obs_features)))
         y_tr.append(np.zeros((n, act_dim)))
         for j in range(obs_features):
-            x_tr[-1][lookback - 1:, j] = np.interp(t, expert_action_timestamps, expert_obs[:, j])
+            x_tr[-1][:, j] = np.interp(t, expert_action_timestamps, expert_obs[:, j])
         for j in range(act_dim):
             y_tr[-1][:, j] = np.interp(t, expert_action_timestamps, expert_actions[:, j])
         batch_idx += 1
@@ -76,10 +76,10 @@ if __name__ == '__main__':
         t = np.arange(expert_action_timestamps[0], expert_action_timestamps[-1], tstep)
         n = len(t)
         nbatches_val += n
-        x_val.append(np.zeros((lookback + n - 1, obs_features)))
+        x_val.append(np.zeros((n, obs_features)))
         y_val.append(np.zeros((n, act_dim)))
         for j in range(obs_features):
-            x_val[-1][lookback - 1:, j] = np.interp(t, expert_action_timestamps, expert_obs[:, j])
+            x_val[-1][:, j] = np.interp(t, expert_action_timestamps, expert_obs[:, j])
         for j in range(act_dim):
             y_val[-1][:, j] = np.interp(t, expert_action_timestamps, expert_actions[:, j])
         batch_idx += 1
@@ -101,12 +101,13 @@ if __name__ == '__main__':
         y = np.zeros((batch_size, act_dim))
         for i in range(batch_size):
             traj_idx = np.random.choice(n)
-            l = x_list[traj_idx].shape[0] - lookback + 1
-            idx = np.random.choice(l)
-            x[i, :, :] = x_list[traj_idx][idx: idx + lookback, :]
-            y[i, :] = y_list[traj_idx][idx, :]
+            l = x_list[traj_idx].shape[0]
+            idx_end = np.random.choice(l)
+            idx_start = np.maximum(0, idx_end - lookback)
+            x_ = x_list[traj_idx][idx_start:idx_end, :]
+            x[i, :, :] = np.vstack([np.zeros((lookback - x_.shape[0], obs_features)), x_])
+            y[i, :] = y_list[traj_idx][idx_end, :]
         return x, y
-
 
     for epoch in range(npretrain):
 

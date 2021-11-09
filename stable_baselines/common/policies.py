@@ -266,7 +266,7 @@ class Cnn1Extractor(Model):
                     rseq = layer[2]
                     self.shared_net.append(layers.LSTM(
                         nunits, return_sequences=rseq, activation=activation_fn,
-                        recurrent_dropout=dropout,
+                        #recurrent_dropout=dropout,
                         kernel_regularizer=tf.keras.regularizers.l1_l2(l1=1e-5, l2=1e-4),
                         bias_regularizer=tf.keras.regularizers.l2(1e-4),
                         trainable=shared_trainable
@@ -276,7 +276,7 @@ class Cnn1Extractor(Model):
                     rseq = layer[2]
                     self.shared_net.append(layers.Bidirectional(layers.LSTM(
                         nunits, return_sequences=rseq, activation=activation_fn,
-                        recurrent_dropout=dropout,
+                        #recurrent_dropout=dropout,
                         kernel_regularizer=tf.keras.regularizers.l1_l2(l1=1e-5, l2=1e-4),
                         bias_regularizer=tf.keras.regularizers.l2(1e-4),
                         trainable=shared_trainable
