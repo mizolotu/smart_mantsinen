@@ -288,7 +288,6 @@ class MantsinenBasic(gym.Env):
         return obs
 
     def _set_action(self, action):
-        print(action)
         conditional = []
         for signal in self.conditional_signals:
             if signal['type'] == 'unconditional':

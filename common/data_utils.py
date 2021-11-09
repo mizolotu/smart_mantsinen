@@ -1,4 +1,4 @@
-import pandas, json
+import pandas, json, os
 import numpy as np
 import os.path as osp
 
@@ -305,6 +305,18 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints, obs_wp_freq,
     n_stay_thr = np.maximum(np.mean(n_stay_maxs) + 3 * np.std(n_stay_maxs), np.max(n_stay_maxs))
 
     return np.vstack(trajectories_tr), np.vstack(trajectories_val), waypoints, waypoint_traj_ids, waypoint_stages, traj_sizes, n_stay_thr
+
+def load_waypoints_and_meta(waypoints_dir, dataset_dir):
+    wp_files = [osp.join(waypoints_dir, fpath) for fpath in os.listdir(waypoints_dir) if fpath.endswith('txt')]
+    waypoints = []
+    for i, wp in enumerate(wp_files):
+        waypoints.append(read_csv(waypoints_dir, f'wps{i+1}.txt'))
+    meta = read_json(dataset_dir, 'metainfo.json')
+    tr_waypoints = [wp for wp, wp_stage in zip(waypoints, meta['wp_stages']) if wp_stage == 'train']
+    tr_traj_sizes = [s for s, wp_stage in zip(meta['traj_sizes'], meta['wp_stages']) if wp_stage == 'train']
+    te_waypoints = [wp for wp, wp_stage in zip(waypoints, meta['wp_stages']) if wp_stage == 'test']
+    te_traj_sizes = [s for s, wp_stage in zip(meta['traj_sizes'], meta['wp_stages']) if wp_stage == 'test']
+    return tr_waypoints, te_waypoints, tr_traj_sizes, te_traj_sizes
 
 def get_test_waypoints(fname):
     v = pandas.read_csv(fname, header=None).values
