@@ -119,7 +119,7 @@ class PPOPolicy(BasePolicy):
 
         elif isinstance(self.action_dist, CategoricalDistribution):
             # Here mean_actions are the logits before the softmax
-            return mean_actions, *self.action_dist.proba_distribution(mean_actions, deterministic=deterministic)
+            return [mean_actions] +[item for item in self.action_dist.proba_distribution(mean_actions, deterministic=deterministic)]
 
     def actor_forward(self, obs, deterministic=False):
         latent_pi, _ = self._get_latent(obs)
