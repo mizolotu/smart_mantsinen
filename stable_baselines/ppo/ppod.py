@@ -1,7 +1,7 @@
 import os, shutil, psutil
 import os.path as osp
 
-import gym, pyautogui, cv2
+import gym, cv2
 from gym import spaces
 import tensorflow as tf
 import numpy as np
@@ -150,6 +150,8 @@ class PPOD(BaseRLModel):
         return params_loaded, policy_loaded
 
     def _setup_runner(self, solverpath):
+
+        import pyautogui
 
         self.solverpath = solverpath
         self.mvs = self.env.mvs
