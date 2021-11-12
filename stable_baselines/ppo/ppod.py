@@ -14,7 +14,6 @@ from stable_baselines.common import logger
 from stable_baselines.ppo.policies import PPOPolicy
 from stable_baselines.common.save_util import data_to_json, json_to_data
 
-from common.solver_utils import get_solver_path, start_solver, stop_solver
 from common.server_utils import is_backend_registered, delete_id
 from time import sleep, time
 from threading import Thread
@@ -31,6 +30,9 @@ class PPOD(BaseRLModel):
                  _init_setup_model=True, model_path=None, log_path=None, chkpt_name=None):
 
         super(PPOD, self).__init__(policy, env, PPOPolicy, policy_kwargs=policy_kwargs, verbose=verbose, create_eval_env=create_eval_env, support_multi_env=True, seed=seed)
+
+        import pyautogui
+        from common.solver_utils import get_solver_path, start_solver, stop_solver
 
         self.n_envs_train = n_env_train
 
@@ -150,8 +152,6 @@ class PPOD(BaseRLModel):
         return params_loaded, policy_loaded
 
     def _setup_runner(self, solverpath):
-
-        import pyautogui
 
         self.solverpath = solverpath
         self.mvs = self.env.mvs
