@@ -28,8 +28,8 @@ nwaypoints = 16
 obs_wp_freq = 16
 validation_size = 0.1
 ppo_net_arch = [
-    #('conv1d', 256, 32, 4, 'valid'), ('conv1d', 512, 16, 4, 'valid'), ('dense', 1024),
-    #('conv1d', 256, 8, 4, 'valid'), ('lstm', 256, False), ('dense', 512),
-    ('bilstm', 256, False), ('dense', 512),
+    #('conv1d', 256, 10, 5, 'valid'), ('conv1d', 512, 10, 5, 'valid'), ('dense', 1024),
+    #('conv1d', 256, 10, 5, 'valid'), ('lstm', 256, False), ('dense', 512),
+    ('lstm', 64, False), ('dense', 64),
     dict(vf=[64, 64]), dict(pi=[64, 64])
 ]

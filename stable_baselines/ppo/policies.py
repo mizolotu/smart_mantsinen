@@ -115,7 +115,7 @@ class PPOPolicy(BasePolicy):
         mean_actions = self.action_net(latent_pi)
 
         if isinstance(self.action_dist, DiagGaussianDistribution):
-            return mean_actions, *self.action_dist.proba_distribution(mean_actions, self.log_std, deterministic=deterministic)
+            return [mean_actions] + [item for item in self.action_dist.proba_distribution(mean_actions, self.log_std, deterministic=deterministic)]
 
         elif isinstance(self.action_dist, CategoricalDistribution):
             # Here mean_actions are the logits before the softmax

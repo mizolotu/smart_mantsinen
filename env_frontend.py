@@ -62,8 +62,8 @@ class MantsinenBasic(gym.Env):
         # dimensions and standardization coefficients
 
         self.obs_wp_freq = obs_wp_freq
-        npoints = 2 # 2 + self.waypoints.shape[0] // obs_wp_freq # self.waypoints.shape[0] # 3 # number of waypoints participating in each observation calculation
-        ndists = 2
+        npoints = 3 # 2 + self.waypoints.shape[0] // obs_wp_freq # self.waypoints.shape[0] # 3 # number of waypoints participating in each observation calculation
+        ndists = 3
         rew_dim = len(self.signals['reward'])
         obs_dim = rew_dim * npoints + ndists
         self.rew_min = np.array(mins['reward'])

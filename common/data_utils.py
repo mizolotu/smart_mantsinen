@@ -239,8 +239,8 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints, obs_wp_freq,
             from_rp_to_wps_with_lookback = [
                 from_rp_to_first_wp_with_lookback,
                 from_rp_to_first_wp_with_lookback_norm_std.reshape(1, 1),
-                #from_rp_to_nearest_wp_with_lookback,
-                #from_rp_to_nearest_wp_with_lookback_norm_std.reshape(1, 1),
+                from_rp_to_nearest_wp_with_lookback,
+                from_rp_to_nearest_wp_with_lookback_norm_std.reshape(1, 1),
                 from_rp_to_last_wp_with_lookback,
                 from_rp_to_last_wp_with_lookback_norm_std.reshape(1, 1)
             ]
