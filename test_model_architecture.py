@@ -135,7 +135,7 @@ if __name__ == '__main__':
 
         val_losses.append(val_loss / nbatches_val)
 
-        print(f'At epoch {epoch + 1}/{npretrain}, train loss is {train_loss / nbatches_tr}, validation loss is {val_loss / nbatches_val}, patience is {patience_count + 1}/{patience}')
+        print(f'At epoch {epoch + 1}/{npretrain}, train loss is {train_loss / nbatches_tr}, mean validation loss is {np.mean(val_losses)}, patience is {patience_count + 1}/{patience}')
 
         if np.mean(val_losses) < val_loss_min:
             val_loss_min = np.mean(val_losses)
