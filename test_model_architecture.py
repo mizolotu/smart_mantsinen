@@ -1,9 +1,10 @@
 import tensorflow as tf
 import numpy as np
+import os
+import os.path as osp
 
 from collections import deque
-from config import ppo_net_arch, waypoints_dir, dataset_dir, signal_dir, lookback, tstep, batch_size, npretrain, patience, learning_rate, action_scale
-from stable_baselines.common.policies import Cnn1Extractor
+from config import ppo_net_arch, waypoints_dir, dataset_dir, signal_dir, lookback, tstep, batch_size, npretrain, patience, learning_rate, action_scale, model_output
 from stable_baselines.ppo.policies import PPOPolicy
 from common.data_utils import read_csv, load_waypoints_and_meta, load_signals
 from gym.spaces import Box
@@ -150,3 +151,8 @@ if __name__ == '__main__':
                 model.set_weights(best_weights)
                 print(f'Pretraining has finished with the minimum loss: {val_loss_min}')
                 break
+
+    chkp_dir = osp.join(os.path.abspath(model_output), 'ppo')
+    if not osp.isdir(chkp_dir):
+        os.mkdir(chkp_dir)
+    model.save(chkp_dir, 'first')
