@@ -19,6 +19,9 @@ from time import sleep, time
 from threading import Thread
 from collections import deque
 
+import pyautogui
+from common.solver_utils import get_solver_path, start_solver, stop_solver
+
 class PPOD(BaseRLModel):
 
     def __init__(self, policy, env, n_env_train, learning_rate=2.5e-4,
@@ -30,9 +33,6 @@ class PPOD(BaseRLModel):
                  _init_setup_model=True, model_path=None, log_path=None, chkpt_name=None):
 
         super(PPOD, self).__init__(policy, env, PPOPolicy, policy_kwargs=policy_kwargs, verbose=verbose, create_eval_env=create_eval_env, support_multi_env=True, seed=seed)
-
-        import pyautogui
-        from common.solver_utils import get_solver_path, start_solver, stop_solver
 
         self.n_envs_train = n_env_train
 
@@ -212,7 +212,7 @@ class PPOD(BaseRLModel):
         out.release()
 
     def _run_one(self, env_count, env_idx, mb_obs, mb_actions, mb_values, mb_neglogpacs, mb_dones, mb_rewards, last_values, deterministic=False,
-                 img_file=None, video_file=None, headless=False, sleep_interval=1, delay_interval=2, record_freq=20, img_freq=512):
+                 img_file=None, video_file=None, headless=False, sleep_interval=1, delay_interval=2, record_freq=2048, img_freq=2048):
 
         # sleep to prevent pressure bug
 
@@ -579,7 +579,7 @@ class PPOD(BaseRLModel):
 
             val_losses.append(val_loss / nbatches_val)
 
-            print(f'At epoch {epoch + 1}/{nepochs}, train loss is {train_loss / nbatches_tr}, validation loss is {val_loss / nbatches_val}, patience is {patience_count + 1}/{patience}')
+            print(f'At epoch {epoch + 1}/{nepochs}, train loss is {train_loss / nbatches_tr}, mean validation loss is {np.mean(val_losses)}, patience is {patience_count + 1}/{patience}')
 
             if np.mean(val_losses) < val_loss_min:
                 val_loss_min = np.mean(val_losses)

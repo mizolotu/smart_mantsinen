@@ -236,7 +236,7 @@ class MlpExtractor(Model):
 
 class Cnn1Extractor(Model):
 
-    def __init__(self, net_arch, activation_fn, shared_trainable=True, vf_trainable=True, pi_trainable=True, dropout=0.5, gn_std=0.25):
+    def __init__(self, net_arch, activation_fn, shared_trainable=True, vf_trainable=True, pi_trainable=True, dropout=0.5, gn_std=0.05):
         super(Cnn1Extractor, self).__init__()
 
         self.shared_trainable = shared_trainable
@@ -266,7 +266,6 @@ class Cnn1Extractor(Model):
                     rseq = layer[2]
                     self.shared_net.append(layers.LSTM(
                         nunits, return_sequences=rseq, activation=activation_fn,
-                        #recurrent_dropout=dropout,
                         kernel_regularizer=tf.keras.regularizers.l1_l2(l1=1e-5, l2=1e-4),
                         bias_regularizer=tf.keras.regularizers.l2(1e-4),
                         trainable=shared_trainable
@@ -276,7 +275,6 @@ class Cnn1Extractor(Model):
                     rseq = layer[2]
                     self.shared_net.append(layers.Bidirectional(layers.LSTM(
                         nunits, return_sequences=rseq, activation=activation_fn,
-                        #recurrent_dropout=dropout,
                         kernel_regularizer=tf.keras.regularizers.l1_l2(l1=1e-5, l2=1e-4),
                         bias_regularizer=tf.keras.regularizers.l2(1e-4),
                         trainable=shared_trainable

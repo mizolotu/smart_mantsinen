@@ -35,10 +35,10 @@ if __name__ == '__main__':
     for i, wp in enumerate(wp_files):
         waypoints.append(read_csv(waypoints_dir, f'wps{i+1}.txt'))
     meta = read_json(dataset_dir, 'metainfo.json')
-    tr_waypoints = [wp for wp, wp_stage in zip(waypoints, meta['wp_stages']) if wp_stage == 'train']
-    tr_traj_sizes = [s for s, wp_stage in zip(meta['traj_sizes'], meta['wp_stages']) if wp_stage == 'train']
-    te_waypoints = [wp for wp, wp_stage in zip(waypoints, meta['wp_stages']) if wp_stage == 'test']
-    te_traj_sizes = [s for s, wp_stage in zip(meta['traj_sizes'], meta['wp_stages']) if wp_stage == 'test']
+    tr_waypoints = [wp for wp, wp_stage in zip(waypoints, meta['traj_stages']) if wp_stage == 'train']
+    tr_traj_sizes = [s for s, wp_stage in zip(meta['wp_sizes'], meta['wp_stages']) if wp_stage == 'train']
+    te_waypoints = [wp for wp, wp_stage in zip(waypoints, meta['traj_stages']) if wp_stage == 'test']
+    te_traj_sizes = [s for s, wp_stage in zip(meta['wp_sizes'], meta['wp_stages']) if wp_stage == 'test']
 
     # create environments
 
@@ -53,13 +53,11 @@ if __name__ == '__main__':
             tr_waypoints,
             nsteps,
             lookback,
-            obs_wp_freq,
             use_inputs,
             use_outputs,
             action_scale,
             wp_size,
             tstep,
-            meta['n_stay_max'] * 9999,
             bonus
         ) for i in range(nenvs)
     ] + [
@@ -73,13 +71,11 @@ if __name__ == '__main__':
             te_waypoints,
             nsteps,
             lookback,
-            obs_wp_freq,
             use_inputs,
             use_outputs,
             action_scale,
             wp_size,
             tstep,
-            meta['n_stay_max'] * 9999,
             bonus
         )
     ]
@@ -98,7 +94,6 @@ if __name__ == '__main__':
         bc_train = read_csv(dataset_dir, 'train.csv')
         bc_val = read_csv(dataset_dir, 'test.csv')
         model.pretrain(bc_train, bc_val, tr_traj_sizes, te_traj_sizes, tstep, nepochs=npretrain)
-        #model.pretrain_recurrent(bc_train, bc_val, tr_traj_sizes, te_traj_sizes, nepochs=npretrain)
         model.save(chkp_dir, 'first')
 
     # disable cuda

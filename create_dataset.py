@@ -9,18 +9,16 @@ if __name__ == '__main__':
     # prepare training data
 
     trajectory_files = [osp.join(trajectory_dir, fpath) for fpath in os.listdir(trajectory_dir) if fpath.endswith('csv')]
-    bc_train, bc_val, wps, wp_ids, wp_stages, traj_sizes, n_stay_max = prepare_trajectories(
+    bc_train, bc_val, wps, traj_ids, traj_stages, wp_stages, wp_sizes = prepare_trajectories(
         signal_dir,
         trajectory_files,
         n_waypoints=nwaypoints,
-        obs_wp_freq=obs_wp_freq,
         use_inputs=use_inputs,
         use_outputs=use_outputs,
         action_scale=action_scale,
         val_size=validation_size,
         wp_size=wp_size
     )
-    n_stay_max *= nsteps
     print(bc_train.shape, bc_val.shape)
 
     # save dataset
@@ -30,10 +28,10 @@ if __name__ == '__main__':
     write_csv(bc_train, dataset_dir, 'train.csv')
     write_csv(bc_val, dataset_dir, 'test.csv')
     write_json({
-        'n_stay_max': n_stay_max,
-        'wp_ids': wp_ids,
+        'wp_sizes': wp_sizes,
         'wp_stages': wp_stages,
-        'traj_sizes': traj_sizes
+        'traj_stages': traj_stages,
+        'traj_ids': traj_ids
     }, dataset_dir, 'metainfo.json')
 
     # save waypoints

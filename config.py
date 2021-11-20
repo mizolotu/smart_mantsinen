@@ -5,12 +5,13 @@ model_output = 'models/mevea/mantsinen/'
 video_output = 'videos/mevea/mantsinen/'
 img_output = 'screenshots/mevea/mantsinen/'
 trajectory_dir = 'data/trajectories'
+trajectory_plot_dir = 'data/trajectory_plots'
 signal_dir = 'data/signals'
 dataset_dir = 'data/dataset'
 waypoints_dir = 'data/waypoints'
 default_actions = [[0.0, 0.0, 0.0, 0.0, 0.0], [0.0, 100.0, 0.0, 100.0, 0.0]]
 nenvs = 8  # <- change this if needed
-nsteps = 1024
+nsteps = 4096
 batch_size = 256
 npretrain = 10000
 patience = 100
@@ -25,12 +26,11 @@ lookback = 256
 tstep = 0.01
 bonus = 10
 nwaypoints = 16
-obs_wp_freq = 16
 validation_size = 0.1
 ppo_net_arch = [
     #('conv1d', 256, 10, 5, 'valid'), ('conv1d', 512, 10, 5, 'valid'), ('dense', 1024),
     #('conv1d', 256, 10, 5, 'valid'), ('lstm', 256, False), ('dense', 512),
     #('lstm', 64, True), ('lstm', 64, False), ('dense', 64),
-    ('lstm', 64, True), ('lstm', 64, False), ('dense', 64),
+    ('lstm', 64, False), ('dense', 64),
     dict(vf=[64, 64]), dict(pi=[64, 64])
 ]
