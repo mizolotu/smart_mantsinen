@@ -102,7 +102,7 @@ if __name__ == '__main__':
             idx_end = np.random.choice(l)
             idx_start = np.maximum(0, idx_end - lookback)
             x_ = x_list[traj_idx][idx_start:idx_end, :]
-            x[i, :, :] = np.vstack([np.zeros((lookback - x_.shape[0], obs_features)), x_])
+            x[i, :, :] = np.vstack([x_, np.zeros((lookback - x_.shape[0], obs_features))])
             y[i, :] = y_list[traj_idx][idx_end, :]
         return x, y
 

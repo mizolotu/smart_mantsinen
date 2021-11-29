@@ -23,7 +23,7 @@ if __name__ == '__main__':
     parser.add_argument('-w', '--waypoints', help='Text file with waypoints.', default='data/waypoints/wps15.txt')
     parser.add_argument('-m', '--model', help='Model directory.', default='models/mevea/mantsinen/ppo')
     parser.add_argument('-c', '--checkpoint', help='Checkpoint', default='first', choices=['first', 'last', 'best'])
-    parser.add_argument('-v', '--video', help='Record video?', type=bool)
+    parser.add_argument('-v', '--video', help='Record video?', type=bool, default=False)
     args = parser.parse_args()
 
     chkpt_dir = args.model
@@ -37,8 +37,6 @@ if __name__ == '__main__':
     # extract waypoints
 
     waypoints = get_test_waypoints(args.waypoints)
-    last_dist_max = np.linalg.norm(waypoints[-1] - waypoints[-2])
-    n_stay_max = np.inf
 
     # create environment
 
@@ -52,13 +50,11 @@ if __name__ == '__main__':
         waypoints,
         nsteps,
         lookback,
-        obs_wp_freq,
         use_inputs,
         use_outputs,
         action_scale,
         wp_size,
         tstep,
-        n_stay_max,
         bonus
     )]
     env = MeveaVecEnv(env_fns)

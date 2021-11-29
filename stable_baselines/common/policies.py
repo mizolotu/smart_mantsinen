@@ -236,7 +236,7 @@ class MlpExtractor(Model):
 
 class Cnn1Extractor(Model):
 
-    def __init__(self, net_arch, activation_fn, shared_trainable=True, vf_trainable=True, pi_trainable=True, dropout=0.5, gn_std=0.05):
+    def __init__(self, net_arch, activation_fn, shared_trainable=True, vf_trainable=True, pi_trainable=True, dropout=0.5, gn_std=0.01):
         super(Cnn1Extractor, self).__init__()
 
         self.shared_trainable = shared_trainable
@@ -261,7 +261,9 @@ class Cnn1Extractor(Model):
         for idx, layer in enumerate(shared_part[:-1]):
             if isinstance(layer, tuple):
                 layer_type = layer[0]
-                if layer_type == 'lstm':
+                if layer_type == 'mask':
+                    self.shared_net.append(layers.Masking())
+                elif layer_type == 'lstm':
                     nunits = layer[1]
                     rseq = layer[2]
                     self.shared_net.append(layers.LSTM(

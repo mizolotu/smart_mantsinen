@@ -142,12 +142,6 @@ class MantsinenBasic(gym.Env):
         wp_nearst, wp_nearest_not_completed = self._calculate_relations_to_wps(xyz)
         obs = self._calculate_obs(xyz, wp_nearest_not_completed)
 
-        #import pandas
-        #self.vals = pandas.read_csv('tmp.txt', header=None).values
-        #self.obs_vals = self.vals[:, :self.observation_space.shape[0]]
-        #best_idx = np.argmin(np.linalg.norm(self.obs_vals - obs[None, :]))
-        #print(best_idx, self.vals[best_idx, self.observation_space.shape[0]: self.observation_space.shape[0] + self.action_space.shape[0]])
-
         return obs
 
     def step(self, action):
@@ -175,12 +169,21 @@ class MantsinenBasic(gym.Env):
 
         xyz = np.array(reward_components)
         wp_nearst, wp_nearest_not_completed = self._calculate_relations_to_wps(xyz)
-        reward, done, info = self._calculate_reward(xyz)
+        reward, done, info, switch_wp = self._calculate_reward(xyz)
         self.reward += reward
+
+        # crashed?
 
         if crashed:
             print(id, 'Crashed :(')
             done = True
+
+        # switch wp
+
+        if switch_wp:
+            self.rp_to_wp_buff.clear()
+            self.i_buff.clear()
+            self.o_buff.clear()
 
         # calculate new obs
 
@@ -241,12 +244,12 @@ class MantsinenBasic(gym.Env):
         from_rp_to_wp_last_norm_std = from_rp_to_wp_last_norm / self.d_max
 
         rp_to_wp = np.hstack([
-            from_rp_to_wp_first,
-            from_rp_to_wp_first_norm_std,
+            #from_rp_to_wp_first,
+            #from_rp_to_wp_first_norm_std,
             from_rp_to_wp_nearest,
             from_rp_to_wp_nearest_norm_std,
-            from_rp_to_wp_last,
-            from_rp_to_wp_last_norm_std
+            #from_rp_to_wp_last,
+            #from_rp_to_wp_last_norm_std
         ])
 
         self.rp_to_wp_buff.append(rp_to_wp)
@@ -262,7 +265,7 @@ class MantsinenBasic(gym.Env):
         # pad with zeros
 
         zeros = np.zeros((self.lookback - obs.shape[0], obs.shape[1]))
-        obs = np.vstack([zeros, obs])
+        obs = np.vstack([obs, zeros])
 
         return obs
 
@@ -294,8 +297,10 @@ class MantsinenBasic(gym.Env):
             self.wps_completed[wp_nearest_idx] = 1
             score = np.clip(1 - dist_to_nearest_wp_std - dist_to_last_std, 0, 1) + self.bonus
             done = False
+            switch_wp = True
         else:
             score = np.clip(1 - dist_to_nearest_wp_std - dist_to_last_std, 0, 1)
             done = False
+            switch_wp = False
         info = {'rc1': dist_to_nearest_wp_std, 'rc2': dist_to_last_std, 'rc3': 0}
-        return score, done, info
+        return score, done, info, switch_wp

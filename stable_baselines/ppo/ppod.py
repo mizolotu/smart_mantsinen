@@ -235,6 +235,9 @@ class PPOD(BaseRLModel):
             if video_file is not None:
                 fourcc = cv2.VideoWriter_fourcc(*"MP4V")
                 out = cv2.VideoWriter(video_file, fourcc, 20.0, (screen_size))
+
+        tstart = time()
+
         for step in range(self.n_steps):
 
             obs = obs.reshape(1, *obs.shape)
@@ -272,6 +275,8 @@ class PPOD(BaseRLModel):
                 img = pyautogui.screenshot(region=(x, y, width, height))
                 shots.append(cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR))
 
+            #print(step, time() - tstart)
+
             # reset if done
 
             if done:
@@ -292,6 +297,8 @@ class PPOD(BaseRLModel):
                 sleep(delay_interval)
                 self.env.set_attr('id', [proc.pid], indices=[env_idx])
                 obs = self.env.reset_one(env_idx)
+
+            tstart = time()
 
         obs = obs.reshape(1, *obs.shape)
         values = self.policy.value_forward(obs)
@@ -491,10 +498,10 @@ class PPOD(BaseRLModel):
             t = np.arange(expert_action_timestamps[0], expert_action_timestamps[-1], tstep)
             n = len(t)
             nbatches_tr += n
-            x_tr.append(np.zeros((obs_lookback + n - 1, obs_features)))
+            x_tr.append(np.zeros((n, obs_features)))
             y_tr.append(np.zeros((n, act_dim)))
             for j in range(obs_features):
-                x_tr[-1][obs_lookback - 1:, j] = np.interp(t, expert_action_timestamps, expert_obs[:, j])
+                x_tr[-1][:, j] = np.interp(t, expert_action_timestamps, expert_obs[:, j])
             for j in range(act_dim):
                 y_tr[-1][:, j] = np.interp(t, expert_action_timestamps, expert_actions[:, j])
             batch_idx += 1
@@ -512,10 +519,10 @@ class PPOD(BaseRLModel):
             t = np.arange(expert_action_timestamps[0], expert_action_timestamps[-1], tstep)
             n = len(t)
             nbatches_val += n
-            x_val.append(np.zeros((obs_lookback + n - 1, obs_features)))
+            x_val.append(np.zeros((n, obs_features)))
             y_val.append(np.zeros((n, act_dim)))
             for j in range(obs_features):
-                x_val[-1][obs_lookback - 1:, j] = np.interp(t, expert_action_timestamps, expert_obs[:, j])
+                x_val[-1][:, j] = np.interp(t, expert_action_timestamps, expert_obs[:, j])
             for j in range(act_dim):
                 y_val[-1][:, j] = np.interp(t, expert_action_timestamps, expert_actions[:, j])
             batch_idx += 1
@@ -537,10 +544,12 @@ class PPOD(BaseRLModel):
             y = np.zeros((self.batch_size, act_dim))
             for i in range(self.batch_size):
                 traj_idx = np.random.choice(n)
-                l = x_list[traj_idx].shape[0] - obs_lookback + 1
-                idx = np.random.choice(l)
-                x[i, :, :] = x_list[traj_idx][idx : idx + obs_lookback, :]
-                y[i, :] = y_list[traj_idx][idx, :]
+                l = x_list[traj_idx].shape[0]
+                idx_end = np.random.choice(l)
+                idx_start = np.maximum(0, idx_end - obs_lookback)
+                x_ = x_list[traj_idx][idx_start:idx_end, :]
+                x[i, :, :] = np.vstack([x_, np.zeros((obs_lookback - x_.shape[0], obs_features))])
+                y[i, :] = y_list[traj_idx][idx_end, :]
             return x, y
 
         for epoch in range(nepochs):
