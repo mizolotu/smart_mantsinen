@@ -1,4 +1,7 @@
-import winreg
+try:
+    import winreg
+except:
+    pass
 
 from subprocess import Popen, DEVNULL
 
