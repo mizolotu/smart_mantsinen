@@ -19,7 +19,11 @@ from time import sleep, time
 from threading import Thread
 from collections import deque
 
-import pyautogui
+try:
+    import pyautogui
+except:
+    pass
+
 from common.solver_utils import get_solver_path, start_solver, stop_solver
 
 class PPOD(BaseRLModel):
@@ -212,7 +216,7 @@ class PPOD(BaseRLModel):
         out.release()
 
     def _run_one(self, env_count, env_idx, mb_obs, mb_actions, mb_values, mb_neglogpacs, mb_dones, mb_rewards, last_values, deterministic=False,
-                 img_file=None, video_file=None, headless=False, sleep_interval=1, delay_interval=2, record_freq=2048, img_freq=2048):
+                 img_file=None, video_file=None, headless=False, sleep_interval=1, delay_interval=2, record_freq=4096, img_freq=4096):
 
         # sleep to prevent pressure bug
 
