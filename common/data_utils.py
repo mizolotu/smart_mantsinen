@@ -299,12 +299,12 @@ def load_waypoints_and_meta(waypoints_dir, dataset_dir):
     wp_files = [osp.join(waypoints_dir, fpath) for fpath in os.listdir(waypoints_dir) if fpath.endswith('txt')]
     waypoints = []
     for i, wp in enumerate(wp_files):
-        waypoints.append(read_csv(waypoints_dir, f'wps{i+1}.txt'))
+        waypoints.append(read_csv(waypoints_dir, f'wps{i + 1}.txt'))
     meta = read_json(dataset_dir, 'metainfo.json')
-    tr_waypoints = [wp for wp, wp_stage in zip(waypoints, meta['wp_stages']) if wp_stage == 'train']
-    tr_traj_sizes = [s for s, wp_stage in zip(meta['traj_sizes'], meta['wp_stages']) if wp_stage == 'train']
-    te_waypoints = [wp for wp, wp_stage in zip(waypoints, meta['wp_stages']) if wp_stage == 'test']
-    te_traj_sizes = [s for s, wp_stage in zip(meta['traj_sizes'], meta['wp_stages']) if wp_stage == 'test']
+    tr_waypoints = [wp for wp, wp_stage in zip(waypoints, meta['traj_stages']) if wp_stage == 'train']
+    tr_traj_sizes = [s for s, wp_stage in zip(meta['wp_sizes'], meta['wp_stages']) if wp_stage == 'train']
+    te_waypoints = [wp for wp, wp_stage in zip(waypoints, meta['traj_stages']) if wp_stage == 'test']
+    te_traj_sizes = [s for s, wp_stage in zip(meta['wp_sizes'], meta['wp_stages']) if wp_stage == 'test']
     return tr_waypoints, te_waypoints, tr_traj_sizes, te_traj_sizes
 
 def get_test_waypoints(fname):

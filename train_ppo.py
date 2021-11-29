@@ -8,7 +8,7 @@ from stable_baselines.ppo.ppod import PPOD as ppo
 from stable_baselines.ppo.policies import MlpPolicy
 
 from stable_baselines.common.vec_env.mevea_vec_env import MeveaVecEnv
-from common.data_utils import read_csv, read_json
+from common.data_utils import read_csv, load_waypoints_and_meta
 from config import *
 
 def make_env(env_class, *args):
@@ -30,15 +30,7 @@ if __name__ == '__main__':
 
     # load waypoints and meta
 
-    wp_files = [osp.join(waypoints_dir, fpath) for fpath in os.listdir(waypoints_dir) if fpath.endswith('txt')]
-    waypoints = []
-    for i, wp in enumerate(wp_files):
-        waypoints.append(read_csv(waypoints_dir, f'wps{i+1}.txt'))
-    meta = read_json(dataset_dir, 'metainfo.json')
-    tr_waypoints = [wp for wp, wp_stage in zip(waypoints, meta['traj_stages']) if wp_stage == 'train']
-    tr_traj_sizes = [s for s, wp_stage in zip(meta['wp_sizes'], meta['wp_stages']) if wp_stage == 'train']
-    te_waypoints = [wp for wp, wp_stage in zip(waypoints, meta['traj_stages']) if wp_stage == 'test']
-    te_traj_sizes = [s for s, wp_stage in zip(meta['wp_sizes'], meta['wp_stages']) if wp_stage == 'test']
+    tr_waypoints, te_waypoints, tr_traj_sizes, te_traj_sizes = load_waypoints_and_meta(waypoints_dir, dataset_dir)
 
     # create environments
 
