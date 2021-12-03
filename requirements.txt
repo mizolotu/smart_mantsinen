@@ -4,8 +4,7 @@ requests
 flask
 gym==0.18.0
 tensorflow==2.6.0
-tenosrflow-probability
+tensorflow-probability
 pyautogui
 opencv-python
-plotly
 psutil
