@@ -9,6 +9,8 @@ from gym.spaces import Box
 
 if __name__ == '__main__':
 
+    import os
+    os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
     # load data
 
     data_tr = read_csv(dataset_dir, 'train.csv')
