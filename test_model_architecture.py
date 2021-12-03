@@ -52,12 +52,13 @@ if __name__ == '__main__':
         t = np.arange(expert_action_timestamps[0], expert_action_timestamps[-1], tstep)
         n = len(t)
         nbatches_tr += n
-        x_tr.append(np.zeros((n, obs_features)))
-        y_tr.append(np.zeros((n, act_dim)))
-        for j in range(obs_features):
-            x_tr[-1][:, j] = np.interp(t, expert_action_timestamps, expert_obs[:, j])
-        for j in range(act_dim):
-            y_tr[-1][:, j] = np.interp(t, expert_action_timestamps, expert_actions[:, j])
+        if n > 0:
+            x_tr.append(np.zeros((n, obs_features)))
+            y_tr.append(np.zeros((n, act_dim)))
+            for j in range(obs_features):
+                x_tr[-1][:, j] = np.interp(t, expert_action_timestamps, expert_obs[:, j])
+            for j in range(act_dim):
+                y_tr[-1][:, j] = np.interp(t, expert_action_timestamps, expert_actions[:, j])
         batch_idx += 1
         idx_start = idx_start + l
 
