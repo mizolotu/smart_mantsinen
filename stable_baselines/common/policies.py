@@ -236,7 +236,7 @@ class MlpExtractor(Model):
 
 class Cnn1Extractor(Model):
 
-    def __init__(self, net_arch, activation_fn, shared_trainable=True, vf_trainable=True, pi_trainable=True, dropout=0.5, gn_std=0.01):
+    def __init__(self, net_arch, activation_fn, shared_trainable=True, vf_trainable=True, pi_trainable=True, dropout=0.5, gn_std=0.0, l1=1e-5, l2=1e-4):
         super(Cnn1Extractor, self).__init__()
 
         self.shared_trainable = shared_trainable
@@ -268,8 +268,8 @@ class Cnn1Extractor(Model):
                     rseq = layer[2]
                     self.shared_net.append(layers.LSTM(
                         nunits, return_sequences=rseq, activation=activation_fn,
-                        kernel_regularizer=tf.keras.regularizers.l1_l2(l1=1e-5, l2=1e-4),
-                        bias_regularizer=tf.keras.regularizers.l2(1e-4),
+                        kernel_regularizer=tf.keras.regularizers.l1_l2(l1=l1, l2=l2),
+                        bias_regularizer=tf.keras.regularizers.l2(l2),
                         trainable=shared_trainable
                     ))
                 elif layer_type == 'bilstm':
@@ -277,8 +277,8 @@ class Cnn1Extractor(Model):
                     rseq = layer[2]
                     self.shared_net.append(layers.Bidirectional(layers.LSTM(
                         nunits, return_sequences=rseq, activation=activation_fn,
-                        kernel_regularizer=tf.keras.regularizers.l1_l2(l1=1e-5, l2=1e-4),
-                        bias_regularizer=tf.keras.regularizers.l2(1e-4),
+                        kernel_regularizer=tf.keras.regularizers.l1_l2(l1=l1, l2=l2),
+                        bias_regularizer=tf.keras.regularizers.l2(l2),
                         trainable=shared_trainable
                     )))
                 elif layer_type == 'conv1d':
@@ -288,16 +288,16 @@ class Cnn1Extractor(Model):
                     padding = layer[4]
                     self.shared_net.append(layers.Conv1D(
                         nfilters, kernel_size=kernel_size, strides=stride_size, padding=padding, activation=activation_fn,
-                        kernel_regularizer=tf.keras.regularizers.l1_l2(l1=1e-5, l2=1e-4),
-                        bias_regularizer=tf.keras.regularizers.l2(1e-4),
+                        kernel_regularizer=tf.keras.regularizers.l1_l2(l1=l1, l2=l2),
+                        bias_regularizer=tf.keras.regularizers.l2(l2),
                         trainable=shared_trainable
                     ))
                 elif layer_type == 'dense':
                     nhidden = layer[1]
                     self.shared_net.append(layers.Dense(
                         nhidden, activation=activation_fn,
-                        kernel_regularizer=tf.keras.regularizers.l1_l2(l1=1e-5, l2=1e-4),
-                        bias_regularizer=tf.keras.regularizers.l2(1e-4),
+                        kernel_regularizer=tf.keras.regularizers.l1_l2(l1=l1, l2=l2),
+                        bias_regularizer=tf.keras.regularizers.l2(l2),
                         trainable=shared_trainable
                     ))
                 else:
@@ -317,8 +317,8 @@ class Cnn1Extractor(Model):
         nhidden = shared_part[-1][1]
         self.last_shared_layers.append(layers.Dense(
             nhidden, activation=activation_fn,
-            kernel_regularizer=tf.keras.regularizers.l1_l2(l1=1e-5, l2=1e-4),
-            bias_regularizer=tf.keras.regularizers.l2(1e-4),
+            kernel_regularizer=tf.keras.regularizers.l1_l2(l1=l1, l2=l2),
+            bias_regularizer=tf.keras.regularizers.l2(l2),
             trainable=shared_trainable
         ))
 
@@ -352,7 +352,7 @@ class Cnn1Extractor(Model):
                 assert isinstance(pi_layer_size, int), "Error: net_arch[-1]['pi'] must only contain integers."
                 self.policy_net.append(layers.Dense(
                     pi_layer_size, input_shape=(last_layer_dim_pi,), activation=activation_fn, trainable=pi_trainable,
-                    kernel_regularizer=tf.keras.regularizers.l1_l2(l1=1e-5, l2=1e-4), bias_regularizer=tf.keras.regularizers.l2(1e-4),
+                    kernel_regularizer=tf.keras.regularizers.l1_l2(l1=l1, l2=l2), bias_regularizer=tf.keras.regularizers.l2(l2),
                 ))
                 last_layer_dim_pi = pi_layer_size
                 self.policy_net_bn.append(layers.BatchNormalization())
@@ -361,7 +361,7 @@ class Cnn1Extractor(Model):
                 assert isinstance(vf_layer_size, int), "Error: net_arch[-1]['vf'] must only contain integers."
                 self.value_net.append(layers.Dense(
                     vf_layer_size, input_shape=(last_layer_dim_vf,), activation=activation_fn, trainable=vf_trainable,
-                    kernel_regularizer=tf.keras.regularizers.l1_l2(l1=1e-5, l2=1e-4), bias_regularizer=tf.keras.regularizers.l2(1e-4),
+                    kernel_regularizer=tf.keras.regularizers.l1_l2(l1=l1, l2=l2), bias_regularizer=tf.keras.regularizers.l2(l2),
                 ))
                 last_layer_dim_vf = vf_layer_size
                 self.value_net_bn.append(layers.BatchNormalization())
