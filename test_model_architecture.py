@@ -152,4 +152,4 @@ if __name__ == '__main__':
                 print(f'Pretraining has finished with the minimum loss: {val_loss_min}')
                 break
     with open('results.txt', 'a') as f:
-        f.write(f'{ppo_net_arch}: {val_loss_min}\n')
+        f.write(f'{ppo_net_arch}, {lookback}, {tstep}: {val_loss_min}\n')
