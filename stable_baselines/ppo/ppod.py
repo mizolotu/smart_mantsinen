@@ -552,7 +552,7 @@ class PPOD(BaseRLModel):
                     idx_start = t_idx[-1]
                 else:
                     idx_start = 0
-                if idx_start < idx_action:
+                if idx_start < idx_action and len(t) > 0:
                     x_ = np.zeros((len(t), obs_features))
                     for j in range(obs_features):
                         x_[:, j] = np.interp(t, t_list[traj_idx][idx_start:idx_action], x_list[traj_idx][idx_start:idx_action, j])

@@ -14,9 +14,10 @@ def dummy_predictor(x, npoints=1):
     for obs in x:
         idx = np.where(np.sum(np.abs(obs), 1) > 0)[0]
         if len(idx) == 0:
-            print(obs[:, npoints*4:npoints*4 + act_dim])
+            print(obs[:, npoints * 4 : npoints * 4 + act_dim])
         i = np.where(np.sum(np.abs(obs), 1) > 0)[0][-1]
-        actions.append(obs[i, npoints*4:npoints*4 + act_dim] * action_scale)
+        a = (obs[i, npoints*4:npoints*4 + act_dim] * 2 - 1) * action_scale
+        actions.append(a)
     actions = np.vstack(actions)
     return actions
 
