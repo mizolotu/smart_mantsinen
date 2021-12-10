@@ -12,7 +12,9 @@ from gym.spaces import Box
 def dummy_predictor(x, npoints=1):
     actions = []
     for obs in x:
-        print(np.where(np.sum(np.abs(obs), 1) > 0)[0])
+        idx = np.where(np.sum(np.abs(obs), 1) > 0)[0]
+        if len(idx) == 0:
+            print(obs[:, npoints*4:npoints*4 + act_dim])
         i = np.where(np.sum(np.abs(obs), 1) > 0)[0][-1]
         actions.append(obs[i, npoints*4:npoints*4 + act_dim] * action_scale)
     actions = np.vstack(actions)
@@ -126,7 +128,7 @@ if __name__ == '__main__':
                 idx_start = t_idx[-1]
             else:
                 idx_start = 0
-            if idx_start < idx_action:
+            if idx_start < idx_action and len(t) > 0:
                 x_ = np.zeros((len(t), obs_features))
                 for j in range(obs_features):
                     x_[:, j] = np.interp(t, t_list[traj_idx][idx_start:idx_action], x_list[traj_idx][idx_start:idx_action, j])
