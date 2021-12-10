@@ -9,6 +9,14 @@ from stable_baselines.ppo.policies import PPOPolicy
 from common.data_utils import read_csv, load_waypoints_and_meta, load_signals
 from gym.spaces import Box
 
+def dummy_predictor(x, npoints=1):
+    actions = []
+    for obs in x:
+        i = np.where(np.sum(obs, 1) > 0)[-1]
+        actions.append(obs[i, npoints*4:npoints*4 + act_dim] * action_scale)
+    actions = np.vstack(actions)
+    return actions
+
 if __name__ == '__main__':
 
     # parse args
@@ -149,16 +157,20 @@ if __name__ == '__main__':
             model.optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
         val_loss = 0.0
+        dummy_loss = 0.0
 
         for _ in range(nbatches_val):
             x, y = generate_batch(x_val, y_val, t_val)
             actions, values, log_probs, action_logits = model.call(x)
             loss = tf.reduce_mean(tf.square(actions - y))
             val_loss += loss
+            dummy_actions = dummy_predictor(x)
+            loss = tf.reduce_mean(tf.square(dummy_actions - y))
+            dummy_loss += loss
 
         val_losses.append(val_loss / nbatches_val)
 
-        print(f'At epoch {epoch + 1}/{npretrain}, train loss is {train_loss / nbatches_tr}, mean validation loss is {np.mean(val_losses)}, patience is {patience_count + 1}/{patience}')
+        print(f'At epoch {epoch + 1}/{npretrain}, train loss is {train_loss / nbatches_tr}, mean validation loss is {np.mean(val_losses)}, patience is {patience_count + 1}/{patience}, dummy loss is {dummy_loss / nbatches_val}')
 
         if np.mean(val_losses) < val_loss_min:
             val_loss_min = np.mean(val_losses)

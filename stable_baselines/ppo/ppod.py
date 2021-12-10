@@ -492,45 +492,37 @@ class PPOD(BaseRLModel):
 
         # training batches
 
-        x_tr, y_tr = [], []
+        x_tr, y_tr, t_tr = [], [], []
         nbatches_tr = 0
         idx_start = 0
         batch_idx = 0
         for i, l in enumerate(data_tr_lens):
             idx = np.arange(idx_start, idx_start + l)
             expert_obs, expert_actions, expert_action_timestamps = data_tr[idx, :obs_features], data_tr[idx, obs_features:obs_features + act_dim], data_tr[idx, obs_features + act_dim]
-            t = np.arange(expert_action_timestamps[0], expert_action_timestamps[-1], tstep)
-            n = len(t)
+            n = len(expert_action_timestamps)
             nbatches_tr += n
             if n > 0:
-                x_tr.append(np.zeros((n, obs_features)))
-                y_tr.append(np.zeros((n, act_dim)))
-                for j in range(obs_features):
-                    x_tr[-1][:, j] = np.interp(t, expert_action_timestamps, expert_obs[:, j])
-                for j in range(act_dim):
-                    y_tr[-1][:, j] = np.interp(t, expert_action_timestamps, expert_actions[:, j])
+                x_tr.append(expert_obs)
+                y_tr.append(expert_actions)
+                t_tr.append(expert_action_timestamps)
             batch_idx += 1
             idx_start = idx_start + l
 
         # validation batches
 
-        x_val, y_val = [], []
+        x_val, y_val, t_val = [], [], []
         nbatches_val = 0
         idx_start = 0
         batch_idx = 0
         for i, l in enumerate(data_val_lens):
             idx = np.arange(idx_start, idx_start + l)
             expert_obs, expert_actions, expert_action_timestamps = data_val[idx, :obs_features], data_val[idx, obs_features:obs_features + act_dim], data_val[idx, obs_features + act_dim]
-            t = np.arange(expert_action_timestamps[0], expert_action_timestamps[-1], tstep)
-            n = len(t)
+            n = len(expert_action_timestamps)
             nbatches_val += n
             if n > 0:
-                x_val.append(np.zeros((n, obs_features)))
-                y_val.append(np.zeros((n, act_dim)))
-                for j in range(obs_features):
-                    x_val[-1][:, j] = np.interp(t, expert_action_timestamps, expert_obs[:, j])
-                for j in range(act_dim):
-                    y_val[-1][:, j] = np.interp(t, expert_action_timestamps, expert_actions[:, j])
+                x_val.append(expert_obs)
+                y_val.append(expert_actions)
+                t_val.append(expert_action_timestamps)
             batch_idx += 1
             idx_start = idx_start + l
 
@@ -544,26 +536,40 @@ class PPOD(BaseRLModel):
         val_loss_min = np.inf
         best_weights = None
 
-        def generate_batch(x_list, y_list):
+        def generate_batch(x_list, y_list, t_list):
             n = len(x_list)
-            x = np.zeros((self.batch_size, obs_lookback, obs_features))
-            y = np.zeros((self.batch_size, act_dim))
-            for i in range(self.batch_size):
+            X, Y = [], []
+            while len(X) < self.batch_size:
                 traj_idx = np.random.choice(n)
                 l = x_list[traj_idx].shape[0]
-                idx_end = np.random.choice(l)
-                idx_start = np.maximum(0, idx_end - obs_lookback)
-                x_ = x_list[traj_idx][idx_start:idx_end, :]
-                x[i, :, :] = np.vstack([x_, np.zeros((obs_lookback - x_.shape[0], obs_features))])
-                y[i, :] = y_list[traj_idx][idx_end, :]
-            return x, y
+                idx_action = np.random.choice(l)
+                t_action = t_list[traj_idx][idx_action]
+                t_start = t_action - obs_lookback * tstep
+                t = np.arange(t_start, t_action, tstep)[:obs_lookback]
+                t = t[np.where(t >= t_list[traj_idx][0])]
+                t_idx = np.where(t_list[traj_idx] < t_start)[0]
+                if len(t_idx) > 0:
+                    idx_start = t_idx[-1]
+                else:
+                    idx_start = 0
+                if idx_start < idx_action:
+                    x_ = np.zeros((len(t), obs_features))
+                    for j in range(obs_features):
+                        x_[:, j] = np.interp(t, t_list[traj_idx][idx_start:idx_action], x_list[traj_idx][idx_start:idx_action, j])
+                    x = np.vstack([x_, np.zeros((obs_lookback - x_.shape[0], obs_features))])
+                    y = y_list[traj_idx][idx_action, :]
+                    X.append(x)
+                    Y.append(y)
+            X = np.array(X)
+            Y = np.vstack(Y)
+            return X, Y
 
         for epoch in range(nepochs):
 
             train_loss = 0.0
             for i in range(nbatches_tr):
                 #print(f'{i}/{nbatches_tr}')
-                x, y = generate_batch(x_tr, y_tr)
+                x, y = generate_batch(x_tr, y_tr, t_tr)
                 with tf.GradientTape() as tape:
                     tape.watch(self.pretrain_policy.trainable_variables)
                     actions, values, log_probs, action_logits = self.pretrain_policy.call(x, training=True)
@@ -584,7 +590,7 @@ class PPOD(BaseRLModel):
             val_loss = 0.0
 
             for _ in range(nbatches_val):
-                x, y = generate_batch(x_val, y_val)
+                x, y = generate_batch(x_val, y_val, t_val)
                 actions, values, log_probs, action_logits = self.pretrain_policy.call(x)
                 if isinstance(self.action_space, spaces.Discrete):
                     loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y, logits=action_logits))
