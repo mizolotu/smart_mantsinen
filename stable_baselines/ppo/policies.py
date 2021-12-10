@@ -73,6 +73,7 @@ class PPOPolicy(BasePolicy):
 
         #self.features_extractor = LstmExtractor(net_arch=self.net_arch, activation_fn=self.activation_fn, shared_trainable=self.shared_trainable, vf_trainable=self.vf_trainable, pi_trainable=self.pi_trainable)
         self.features_extractor = Cnn1Extractor(net_arch=self.net_arch, activation_fn=self.activation_fn, shared_trainable=self.shared_trainable, vf_trainable=self.vf_trainable, pi_trainable=self.pi_trainable)
+        #self.features_extractor = MlpExtractor(net_arch=self.net_arch, activation_fn=self.activation_fn, shared_trainable=self.shared_trainable, vf_trainable=self.vf_trainable, pi_trainable=self.pi_trainable)
 
         latent_dim_pi = self.features_extractor.latent_dim_pi
 

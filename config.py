@@ -22,7 +22,7 @@ use_inputs = True
 use_outputs = True
 action_scale = 1
 wp_size = 1
-lookback = 256
+lookback = 16
 tstep = 0.01
 bonus = 10
 nwaypoints = 16
@@ -32,5 +32,6 @@ ppo_net_arch = [
     #('conv1d', 256, 10, 5, 'valid'), ('lstm', 256, False), ('dense', 512),
     #('lstm', 64, True), ('lstm', 64, False), ('dense', 64),
     ('mask'), ('lstm', 256, False), ('dense', 512),
+    #('dense', 512), ('dense', 512),
     dict(vf=[64, 64]), dict(pi=[64, 64])
 ]
