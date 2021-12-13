@@ -203,20 +203,9 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints, use_inputs=T
 
             # creating obs
 
-            rp_with_lookback = np.zeros((1, rewards.shape[1]))
-            is_std_with_lookback = np.zeros((1, inputs.shape[1]))
-            os_std_with_lookback = np.zeros((1, outputs.shape[1]))
-            t = rew_t[i]
-            for k in range(rewards.shape[1]):
-                rp_with_lookback[0, k] = np.interp(t, rew_t, rewards[:, k])
-            for k in range(inputs.shape[1]):
-                is_std_with_lookback[0, k] = np.interp(t, rew_t, is_std[:, k])
-            for k in range(outputs.shape[1]):
-                os_std_with_lookback[0, k] = np.interp(t, rew_t, os_std[:, k])
-
-            from_rp_to_nearest_wp_with_lookback = wp_nearest_not_completed - rp_with_lookback
-            from_rp_to_nearest_wp_with_lookback_norm = np.linalg.norm(from_rp_to_nearest_wp_with_lookback, 2, 1)
-            from_rp_to_nearest_wp_with_lookback /= (from_rp_to_nearest_wp_with_lookback_norm[:, None] + 1e-10)
+            from_rp_to_nearest_wp_with_lookback = wp_nearest_not_completed - rewards[i, :]
+            from_rp_to_nearest_wp_with_lookback_norm = np.linalg.norm(from_rp_to_nearest_wp_with_lookback)
+            from_rp_to_nearest_wp_with_lookback /= (from_rp_to_nearest_wp_with_lookback_norm + 1e-10)
             from_rp_to_nearest_wp_with_lookback_norm_std = from_rp_to_nearest_wp_with_lookback_norm / d_max
 
             #from_rp_to_last_wp_with_lookback = wp_last - rp_with_lookback
@@ -233,7 +222,7 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints, use_inputs=T
                 #from_rp_to_first_wp_with_lookback,
                 #from_rp_to_first_wp_with_lookback_norm_std.reshape(1, 1),
                 from_rp_to_nearest_wp_with_lookback,
-                from_rp_to_nearest_wp_with_lookback_norm_std.reshape(1, 1),
+                from_rp_to_nearest_wp_with_lookback_norm_std.reshape(1,),
                 #from_rp_to_last_wp_with_lookback,
                 #from_rp_to_last_wp_with_lookback_norm_std.reshape(1, 1)
             ]
@@ -244,10 +233,10 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints, use_inputs=T
             # add signal values
 
             if use_inputs:
-                traj = np.hstack([traj, is_std_with_lookback])
+                traj = np.hstack([traj, is_std[i, :]])
 
             if use_outputs:
-                traj = np.hstack([traj, os_std_with_lookback])
+                traj = np.hstack([traj, os_std[i, :]])
 
             traj = traj.reshape(1, -1)
 
@@ -257,7 +246,7 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints, use_inputs=T
 
             # add timestamp
 
-            traj = np.append(traj, [t - tmin])
+            traj = np.append(traj, [rew_t[i] - tmin])
 
             # add to full traj
 

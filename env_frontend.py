@@ -63,7 +63,7 @@ class MantsinenBasic(gym.Env):
         npoints = 1
         ndists = 1
         rew_dim = len(self.signals['reward'])
-        obs_dim = rew_dim * npoints + ndists
+        obs_dim = (rew_dim * npoints + ndists) * lookback
         self.rew_min = np.array(mins['reward'])
         self.rew_max = np.array(maxs['reward'])
         self.v_min = np.hstack([self.rew_min - self.rew_max] * lookback)
@@ -88,7 +88,7 @@ class MantsinenBasic(gym.Env):
 
         # set spaces
 
-        self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(lookback, obs_dim,), dtype=np.float)
+        self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(obs_dim,), dtype=np.float)
         self.action_space = gym.spaces.Box(low=-scale, high=scale, shape=(act_dim,), dtype=np.float)
 
     def reset(self, init_sleep=0.1):

@@ -234,10 +234,13 @@ class MlpExtractor(Model):
         return self.policy_net(shared_latent), self.value_net(shared_latent)
 
 
-class Cnn1Extractor(Model):
+class FeatureExtractor(Model):
 
-    def __init__(self, net_arch, activation_fn, shared_trainable=True, vf_trainable=True, pi_trainable=True, dropout=0.5, gn_std=0.01, l1=1e-3, l2=1e-3):
-        super(Cnn1Extractor, self).__init__()
+    def __init__(self, feature_split, lookback, net_arch, activation_fn, shared_trainable=True, vf_trainable=True, pi_trainable=True, dropout=0.5, gn_std=0.01, l1=1e-3, l2=1e-3):
+        super(FeatureExtractor, self).__init__()
+
+        self.feature_split = feature_split
+        self.lookback = lookback
 
         self.shared_trainable = shared_trainable
         self.vf_trainable = vf_trainable
@@ -373,14 +376,23 @@ class Cnn1Extractor(Model):
 
     def call(self, features, training=False):
 
+        # split features
+
+        shared_latent = tf.split(features, self.feature_split, axis=-1)
+        shared_latent[0] = tf.reshape(shared_latent[0], shape=(-1, self.lookback, self.feature_split[0] // self.lookback))
+
         # shared layers
 
-        shared_latent = features
         for l, bn, gn, do in zip(self.shared_net, self.shared_net_bn, self.shared_net_gn, self.shared_net_do):
-            shared_latent = bn(shared_latent, training & self.shared_trainable)
-            shared_latent = gn(shared_latent, training & self.shared_trainable)
-            shared_latent = l(shared_latent, training = training & self.shared_trainable)
-            shared_latent = do(shared_latent, training & self.shared_trainable)
+            shared_latent[0] = bn(shared_latent[0], training & self.shared_trainable)
+            shared_latent[0] = gn(shared_latent[0], training & self.shared_trainable)
+            shared_latent[0] = l(shared_latent[0], training = training & self.shared_trainable)
+            shared_latent[0] = do(shared_latent[0], training & self.shared_trainable)
+
+        # merge
+
+        #shared_latent = tf.stack(shared_latent, axis=1)
+        shared_latent = tf.concat(shared_latent, axis=-1)
 
         # last shared
 

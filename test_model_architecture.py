@@ -9,14 +9,10 @@ from stable_baselines.ppo.policies import PPOPolicy
 from common.data_utils import read_csv, load_waypoints_and_meta, load_signals
 from gym.spaces import Box
 
-def dummy_predictor(x, npoints=1):
+def dummy_predictor(x):
     actions = []
     for obs in x:
-        idx = np.where(np.sum(np.abs(obs), 1) > 0)[0]
-        if len(idx) == 0:
-            print(obs[:, npoints * 4 : npoints * 4 + act_dim])
-        i = np.where(np.sum(np.abs(obs), 1) > 0)[0][-1]
-        a = (obs[i, npoints*4:npoints*4 + act_dim] * 2 - 1) * action_scale
+        a = (obs[npoints * lookback : npoints * lookback + act_dim] * 2 - 1) * action_scale
         actions.append(a)
     actions = np.vstack(actions)
     return actions
@@ -44,21 +40,33 @@ if __name__ == '__main__':
 
     # load signals
 
-    values, xmin, xmax = load_signals(signal_dir, 'input')
+    values_in, xmin_in, xmax_in = load_signals(signal_dir, 'input')
+    values_out, xmin_out, xmax_out = load_signals(signal_dir, 'output')
 
     # obs and act dim
 
-    act_dim = len(values)
+    act_dim = len(values_in)
     obs_features = data_tr.shape[1] - act_dim - 1
+    npoints = (obs_features - len(values_in) - len(values_out))
 
     # spaces
 
-    obs_space = Box(shape=(lookback, obs_features), low=-np.inf, high=np.inf)
+    obs_space = Box(shape=(npoints * lookback + len(values_in) + len(values_out),), low=-np.inf, high=np.inf)
     act_space = Box(shape=(act_dim,), low=-action_scale, high=action_scale)
 
     # create model
 
-    model = PPOPolicy(obs_space, act_space, lambda x: learning_rate, vf_trainable=False, pi_trainable=False, net_arch=ppo_net_arch, activation_fn=tf.nn.tanh)
+    model = PPOPolicy(
+        obs_space,
+        act_space,
+        (npoints * lookback, len(values_in), len(values_out)),
+        lookback,
+        lambda x: learning_rate,
+        vf_trainable=False,
+        pi_trainable=False,
+        net_arch=ppo_net_arch,
+        activation_fn=tf.nn.tanh
+    )
     model.summary()
 
     # data dims
@@ -130,10 +138,14 @@ if __name__ == '__main__':
             else:
                 idx_start = 0
             if idx_start < idx_action and len(t) > 0:
-                x_ = np.zeros((len(t), obs_features))
-                for j in range(obs_features):
-                    x_[:, j] = np.interp(t, t_list[traj_idx][idx_start:idx_action], x_list[traj_idx][idx_start:idx_action, j])
-                x = np.vstack([x_, np.zeros((lookback - x_.shape[0], obs_features))])
+                x_r = np.zeros((len(t), npoints))
+                for j in range(npoints):
+                    x_r[:, j] = np.interp(t, t_list[traj_idx][idx_start:idx_action], x_list[traj_idx][idx_start:idx_action, j])
+                x_r = np.vstack([x_r, np.zeros((lookback - x_r.shape[0], npoints))])
+                x_io = np.zeros(obs_features - npoints)
+                for j in range(obs_features - npoints):
+                    x_io[j] = np.interp(t[-1], t_list[traj_idx][idx_start:idx_action], x_list[traj_idx][idx_start:idx_action, j])
+                x = np.hstack([x_r.reshape(lookback * npoints), x_io])
                 y = y_list[traj_idx][idx_action, :]
                 X.append(x)
                 Y.append(y)
@@ -146,6 +158,7 @@ if __name__ == '__main__':
         train_loss = 0.0
         for i in range(nbatches_tr):
             x, y = generate_batch(x_tr, y_tr, t_tr)
+
             with tf.GradientTape() as tape:
                 tape.watch(model.trainable_variables)
                 actions, values, log_probs, action_logits = model.call(x, training=True)

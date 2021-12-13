@@ -3,7 +3,7 @@ import numpy as np
 import tensorflow.keras.layers as layers
 from tensorflow.keras.models import Sequential
 
-from stable_baselines.common.policies import BasePolicy, register_policy, MlpExtractor, Cnn1Extractor, LstmExtractor
+from stable_baselines.common.policies import BasePolicy, register_policy, FeatureExtractor
 from stable_baselines.common.distributions import make_proba_distribution, DiagGaussianDistribution, CategoricalDistribution
 
 
@@ -20,13 +20,16 @@ class PPOPolicy(BasePolicy):
     :param ortho_init: (bool) Whether to use or not orthogonal initialization
     :param log_std_init: (float) Initial value for the log standard deviation
     """
-    def __init__(self, observation_space, action_space, learning_rate, net_arch=None, activation_fn=tf.nn.tanh, adam_epsilon=1e-5,
+    def __init__(self, observation_space, action_space, feature_split, lookback, learning_rate, net_arch=None, activation_fn=tf.nn.tanh, adam_epsilon=1e-5,
                  ortho_init=True, log_std_init=0.0, shared_trainable=True, pi_trainable=True, vf_trainable=True, batch_size=None, nsteps=None):
 
         super(PPOPolicy, self).__init__(observation_space, action_space)
 
         self.batch_size = batch_size
         self.nsteps = nsteps
+
+        self.feature_split = feature_split
+        self.lookback = lookback
 
         self.obs_dim = np.prod(self.observation_space.shape)
         self.shared_trainable = shared_trainable
@@ -51,15 +54,9 @@ class PPOPolicy(BasePolicy):
         self.shared_net = None
         self.pi_net, self.vf_net = None, None
 
-        # In the future, feature_extractor will be replaced with a CNN
-        #self.input_layer = Sequential(layers.Flatten(input_shape=(self.obs_dim,), dtype=tf.float32))
-
         self.input_layer = Sequential([
-            #layers.Input(shape=self.observation_space.shape, dtype=tf.float32)
             layers.Input(batch_shape=(batch_size, *self.observation_space.shape), dtype=tf.float32)
-            #layers.Input(batch_shape=(batch_size, nsteps, np.prod(self.observation_space.shape)), dtype=tf.float32)
         ])
-        #self.features_dim = self.obs_dim
         self.log_std_init = log_std_init
         dist_kwargs = None
 
@@ -71,9 +68,7 @@ class PPOPolicy(BasePolicy):
 
     def _build(self, learning_rate):
 
-        #self.features_extractor = LstmExtractor(net_arch=self.net_arch, activation_fn=self.activation_fn, shared_trainable=self.shared_trainable, vf_trainable=self.vf_trainable, pi_trainable=self.pi_trainable)
-        self.features_extractor = Cnn1Extractor(net_arch=self.net_arch, activation_fn=self.activation_fn, shared_trainable=self.shared_trainable, vf_trainable=self.vf_trainable, pi_trainable=self.pi_trainable)
-        #self.features_extractor = MlpExtractor(net_arch=self.net_arch, activation_fn=self.activation_fn, shared_trainable=self.shared_trainable, vf_trainable=self.vf_trainable, pi_trainable=self.pi_trainable)
+        self.features_extractor = FeatureExtractor(self.feature_split, self.lookback, net_arch=self.net_arch, activation_fn=self.activation_fn, shared_trainable=self.shared_trainable, vf_trainable=self.vf_trainable, pi_trainable=self.pi_trainable)
 
         latent_dim_pi = self.features_extractor.latent_dim_pi
 
