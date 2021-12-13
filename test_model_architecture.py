@@ -144,7 +144,7 @@ if __name__ == '__main__':
                 x_r = np.vstack([x_r, np.zeros((lookback - x_r.shape[0], npoints))])
                 x_io = np.zeros(obs_features - npoints)
                 for j in range(obs_features - npoints):
-                    x_io[j] = np.interp(t[-1], t_list[traj_idx][idx_start:idx_action], x_list[traj_idx][idx_start:idx_action, j])
+                    x_io[j] = np.interp(t[-1], t_list[traj_idx][idx_start:idx_action], x_list[traj_idx][idx_start:idx_action, j + npoints])
                 x = np.hstack([x_r.reshape(lookback * npoints), x_io])
                 y = y_list[traj_idx][idx_action, :]
                 X.append(x)
