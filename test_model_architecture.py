@@ -47,6 +47,7 @@ if __name__ == '__main__':
 
     act_dim = len(values_in)
     obs_features = data_tr.shape[1] - act_dim - 1
+    print(obs_features)
     npoints = (obs_features - len(values_in) - len(values_out))
 
     # spaces
@@ -59,7 +60,7 @@ if __name__ == '__main__':
     model = PPOPolicy(
         obs_space,
         act_space,
-        (npoints * lookback, len(values_in), len(values_out)),
+        (npoints * lookback, -1),
         lookback,
         lambda x: learning_rate,
         vf_trainable=False,
@@ -121,7 +122,7 @@ if __name__ == '__main__':
     val_loss_min = np.inf
     best_weights = None
 
-    def generate_batch(x_list, y_list, t_list):
+    def generate_batch(x_list, y_list, t_list, only_first=False):
         n = len(x_list)
         X, Y = [], []
         while len(X) < batch_size:
@@ -145,10 +146,20 @@ if __name__ == '__main__':
                 x_io = np.zeros(obs_features - npoints)
                 for j in range(obs_features - npoints):
                     x_io[j] = np.interp(t[-1], t_list[traj_idx][idx_start:idx_action], x_list[traj_idx][idx_start:idx_action, j + npoints])
-                x = np.hstack([x_r.reshape(lookback * npoints), x_io])
-                y = y_list[traj_idx][idx_action, :]
-                X.append(x)
-                Y.append(y)
+            else:
+                x_r = np.zeros((len(t), npoints))
+                for j in range(npoints):
+                    x_r[:, j] = np.interp(t, t_list[traj_idx][idx_start:idx_action + 1], x_list[traj_idx][idx_start:idx_action+1, j])
+                x_r = np.vstack([x_r, np.zeros((lookback - x_r.shape[0], npoints))])
+                x_io = np.zeros(obs_features - npoints)
+                for j in range(obs_features - npoints - act_dim):
+                    x_io[j] = np.interp(np.maximum(t_action - tstep, 0), t_list[traj_idx][idx_start:idx_action + 1], x_list[traj_idx][idx_start:idx_action + 1, j + npoints + act_dim])
+
+            x = np.hstack([x_r.reshape(lookback * npoints), x_io])
+            y = y_list[traj_idx][idx_action, :]
+            X.append(x)
+            Y.append(y)
+
         X = np.array(X)
         Y = np.vstack(Y)
         return X, Y

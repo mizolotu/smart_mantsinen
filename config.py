@@ -22,6 +22,7 @@ use_inputs = True
 use_outputs = True
 action_scale = 100
 wp_size = 1
+npoints = 4
 lookback = 16
 tstep = 0.01
 bonus = 10

@@ -20,7 +20,7 @@ if __name__ == '__main__':
     # process arguments
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-w', '--waypoints', help='Text file with waypoints.', default='data/waypoints/wps15.txt')
+    parser.add_argument('-w', '--waypoints', help='Text file with waypoints.', default='data/waypoints/wps1.txt')
     parser.add_argument('-m', '--model', help='Model directory.', default='models/mevea/mantsinen/ppo')
     parser.add_argument('-c', '--checkpoint', help='Checkpoint', default='first', choices=['first', 'last', 'best'])
     parser.add_argument('-v', '--video', help='Record video?', type=bool, default=False)
@@ -62,7 +62,7 @@ if __name__ == '__main__':
     # load model and run it in demo mode
 
     try:
-        model = ppo(policy, env, 1, policy_kwargs=dict(net_arch=ppo_net_arch), batch_size=batch_size, n_steps=nsteps,
+        model = ppo(policy, env, 1, npoints=npoints, lookback=lookback, policy_kwargs=dict(net_arch=ppo_net_arch), batch_size=batch_size, n_steps=nsteps,
                     model_path=chkpt_dir, chkpt_name=args.checkpoint, tensorboard_log='tensorboard_log', verbose=1)
         cp_name = osp.basename(args.checkpoint)
         wp_name = osp.basename(args.waypoints)

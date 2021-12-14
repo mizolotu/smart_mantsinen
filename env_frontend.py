@@ -145,6 +145,7 @@ class MantsinenBasic(gym.Env):
         return obs
 
     def step(self, action):
+        print(action)
 
         # set action
 
@@ -255,17 +256,18 @@ class MantsinenBasic(gym.Env):
         self.rp_to_wp_buff.append(rp_to_wp)
         obs = np.vstack(self.rp_to_wp_buff)
 
-        if self.use_inputs:
-            i = np.vstack(self.i_buff)
-            obs = np.hstack([obs, i])
-        if self.use_outputs:
-            o = np.vstack(self.o_buff)
-            obs = np.hstack([obs, o])
-
         # pad with zeros
 
         zeros = np.zeros((self.lookback - obs.shape[0], obs.shape[1]))
         obs = np.vstack([obs, zeros])
+        obs = obs.reshape(1, -1).flatten()
+
+        if self.use_inputs:
+            i = self.i_buff[-1]
+            obs = np.hstack([obs, i])
+        if self.use_outputs:
+            o = self.o_buff[-1]
+            obs = np.hstack([obs, o])
 
         return obs
 
