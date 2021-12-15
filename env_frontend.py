@@ -141,11 +141,12 @@ class MantsinenBasic(gym.Env):
 
         wp_nearst, wp_nearest_not_completed = self._calculate_relations_to_wps(xyz)
         obs = self._calculate_obs(xyz, wp_nearest_not_completed)
-
+        print('Obs i:', i_std)
+        print('Obs o:', o_std)
         return obs
 
     def step(self, action):
-        print(action)
+        print('Action:', action)
 
         # set action
 
@@ -195,7 +196,8 @@ class MantsinenBasic(gym.Env):
         o_std = self._std_vector(o, self.obs_output_min, self.obs_output_max)
         self.o_buff.append(o_std)
         obs = self._calculate_obs(xyz, wp_nearest_not_completed)
-
+        print('Obs i:', i_std)
+        print('Obs o:', o_std)
         return obs, reward, done, info
 
     def render(self, mode='human', close=False):

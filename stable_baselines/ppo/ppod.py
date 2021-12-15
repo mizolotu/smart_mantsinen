@@ -474,7 +474,7 @@ class PPOD(BaseRLModel):
         if hasattr(self.policy, 'log_std'):
             logger.logkv("std", tf.exp(self.policy.log_std).numpy().mean())
 
-    def pretrain(self, data_tr, data_val, data_tr_lens, data_val_lens, tstep, nepochs=10000, patience=100):
+    def pretrain(self, data_tr, data_val, data_tr_lens, data_val_lens, tstep, default_action, nepochs=10000, patience=100):
 
         self.pretrain_policy = self.policy_class(
             self.observation_space, self.action_space, self.feature_split, self.lookback, self.learning_rate,  **self.policy_kwargs, pi_trainable=False, vf_trainable=False
@@ -565,10 +565,21 @@ class PPOD(BaseRLModel):
                     x_io = np.zeros(obs_features - npoints)
                     for j in range(obs_features - npoints):
                         x_io[j] = np.interp(t[-1], t_list[traj_idx][idx_start:idx_action], x_list[traj_idx][idx_start:idx_action, j + npoints])
-                    x = np.hstack([x_r.reshape(self.lookback * npoints), x_io])
-                    y = y_list[traj_idx][idx_action, :]
-                    X.append(x)
-                    Y.append(y)
+                else:
+                    x_r = np.zeros((len(t), npoints))
+                    for j in range(npoints):
+                        x_r[:, j] = np.interp(t, t_list[traj_idx][idx_start:idx_action + 1], x_list[traj_idx][idx_start:idx_action + 1, j])
+                    x_r = np.vstack([x_r, np.zeros((self.lookback - x_r.shape[0], npoints))])
+                    x_io = np.zeros(obs_features - npoints)
+                    x_io[:act_dim] = default_action
+                    for j in range(obs_features - npoints - act_dim):
+                        x_io[j + act_dim] = np.interp(np.maximum(t_action - tstep, 0), t_list[traj_idx][idx_start:idx_action + 1], x_list[traj_idx][idx_start:idx_action + 1, j + npoints + act_dim])
+
+                x = np.hstack([x_r.reshape(self.lookback * npoints), x_io])
+                y = y_list[traj_idx][idx_action, :]
+                X.append(x)
+                Y.append(y)
+
             X = np.array(X)
             Y = np.vstack(Y)
             return X, Y

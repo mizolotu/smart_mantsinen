@@ -4,7 +4,7 @@ import numpy as np
 import argparse as arp
 
 from collections import deque
-from config import ppo_net_arch, waypoints_dir, dataset_dir, signal_dir, lookback, tstep, batch_size, npretrain, patience, learning_rate, action_scale
+from config import ppo_net_arch, waypoints_dir, dataset_dir, signal_dir, lookback, tstep, batch_size, npretrain, patience, learning_rate, action_scale, default_actions
 from stable_baselines.ppo.policies import PPOPolicy
 from common.data_utils import read_csv, load_waypoints_and_meta, load_signals
 from gym.spaces import Box
@@ -43,11 +43,14 @@ if __name__ == '__main__':
     values_in, xmin_in, xmax_in = load_signals(signal_dir, 'input')
     values_out, xmin_out, xmax_out = load_signals(signal_dir, 'output')
 
+    # default action
+
+    default_action = [(x - y) / (z - y) for x, y, z in zip(default_actions[1], xmin_in, xmax_in)]
+
     # obs and act dim
 
     act_dim = len(values_in)
     obs_features = data_tr.shape[1] - act_dim - 1
-    print(obs_features)
     npoints = (obs_features - len(values_in) - len(values_out))
 
     # spaces
@@ -144,8 +147,10 @@ if __name__ == '__main__':
                     x_r[:, j] = np.interp(t, t_list[traj_idx][idx_start:idx_action], x_list[traj_idx][idx_start:idx_action, j])
                 x_r = np.vstack([x_r, np.zeros((lookback - x_r.shape[0], npoints))])
                 x_io = np.zeros(obs_features - npoints)
-                for j in range(obs_features - npoints):
-                    x_io[j] = np.interp(t[-1], t_list[traj_idx][idx_start:idx_action], x_list[traj_idx][idx_start:idx_action, j + npoints])
+                x_io[0 : act_dim] = default_action
+                for j in range(obs_features - npoints - act_dim):
+                    x_io[act_dim + j] = np.interp(np.maximum(t_action - tstep, 0), t_list[traj_idx][idx_start:idx_action + 1],
+                                                            x_list[traj_idx][idx_start:idx_action + 1, j + npoints + act_dim])
             else:
                 x_r = np.zeros((len(t), npoints))
                 for j in range(npoints):

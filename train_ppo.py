@@ -8,7 +8,7 @@ from stable_baselines.ppo.ppod import PPOD as ppo
 from stable_baselines.ppo.policies import MlpPolicy
 
 from stable_baselines.common.vec_env.mevea_vec_env import MeveaVecEnv
-from common.data_utils import read_csv, load_waypoints_and_meta
+from common.data_utils import read_csv, load_waypoints_and_meta, load_signals
 from config import *
 
 def make_env(env_class, *args):
@@ -31,6 +31,11 @@ if __name__ == '__main__':
     # load waypoints and meta
 
     tr_waypoints, te_waypoints, tr_traj_sizes, te_traj_sizes = load_waypoints_and_meta(waypoints_dir, dataset_dir)
+
+    # default action
+
+    _, xmin, xmax = load_signals(signal_dir, 'input')
+    default_action = [(x - y) / (z - y) for x, y, z in zip(default_actions[1], xmin, xmax)]
 
     # create environments
 
@@ -85,7 +90,7 @@ if __name__ == '__main__':
     if not model.loaded:
         bc_train = read_csv(dataset_dir, 'train.csv')
         bc_val = read_csv(dataset_dir, 'test.csv')
-        model.pretrain(bc_train, bc_val, tr_traj_sizes, te_traj_sizes, tstep, nepochs=npretrain)
+        model.pretrain(bc_train, bc_val, tr_traj_sizes, te_traj_sizes, tstep, default_action=default_action, nepochs=npretrain)
         model.save(chkp_dir, 'first')
 
     # disable cuda

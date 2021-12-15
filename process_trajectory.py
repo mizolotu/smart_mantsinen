@@ -7,6 +7,7 @@ from common.solver_utils import get_solver_path, start_solver, stop_solver
 from common.server_utils import is_server_running, is_backend_registered, post_signals, post_action, get_state
 from config import default_actions, trajectory_dir, signal_dir
 
+from collections import deque
 from time import sleep
 
 if __name__ == '__main__':
@@ -20,7 +21,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-m', '--model', help='File path to the model.', default='C:\\Users\\mevea\\MeveaModels\\Mantsinen\\Models\\Mantsinen300M\\300M_fixed.mvs')
     parser.add_argument('-s', '--server', help='Server URL.', default='http://127.0.0.1:5000')
-    parser.add_argument('-o', '--output', help='Output file.', default='trajectory11.csv')
+    parser.add_argument('-o', '--output', help='Output file.', default='trajectory1.csv')
     parser.add_argument('-d', '--debug', help='Debug.', default=False, type=bool)
     args = parser.parse_args()
 
@@ -81,6 +82,8 @@ if __name__ == '__main__':
     moving, acting = False, False
     last_t_state, move_t_start = None, None
 
+    last_states = deque(maxlen=1000)
+
     while not (moving and acting):
         post_action(args.server, backend_id, None, conditional_values, next_simulation_time=0)
         state, reward, conditional_values, t_state_real, t_state_simulation, _ = get_state(args.server, backend_id, last_state_time=0)
@@ -91,6 +94,12 @@ if __name__ == '__main__':
             states.append(state)
             rewards.append(reward)
             is_acting_list.append(True)
+            print(state)
+            for ls in last_states:
+                print(ls)
+        last_time = t_state_simulation
+        last_states.append(state)
+        last_reward = reward
 
     print('Recording the trajectory...')
 
