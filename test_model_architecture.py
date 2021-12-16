@@ -4,7 +4,7 @@ import numpy as np
 import argparse as arp
 
 from collections import deque
-from config import ppo_net_arch, waypoints_dir, dataset_dir, signal_dir, lookback, tstep, batch_size, npretrain, patience, learning_rate, action_scale, default_actions
+from config import ppo_net_arch, waypoints_dir, dataset_dir, signal_dir, lookback, tstep, batch_size, npretrain, patience, learning_rate, action_scale
 from stable_baselines.ppo.policies import PPOPolicy
 from common.data_utils import read_csv, load_waypoints_and_meta, load_signals
 from gym.spaces import Box
@@ -12,7 +12,7 @@ from gym.spaces import Box
 def dummy_predictor(x):
     actions = []
     for obs in x:
-        a = (obs[npoints * lookback : npoints * lookback + act_dim] * 2 - 1) * action_scale
+        a = (obs[-1, obs_features - act_dim - len(values_out) : obs_features - len(values_out)] * 2 - 1) * action_scale
         actions.append(a)
     actions = np.vstack(actions)
     return actions
@@ -43,19 +43,15 @@ if __name__ == '__main__':
     values_in, xmin_in, xmax_in = load_signals(signal_dir, 'input')
     values_out, xmin_out, xmax_out = load_signals(signal_dir, 'output')
 
-    # default action
-
-    default_action = [(x - y) / (z - y) for x, y, z in zip(default_actions[1], xmin_in, xmax_in)]
-
     # obs and act dim
 
+    io_dim = len(values_in) + len(values_out)
     act_dim = len(values_in)
-    obs_features = data_tr.shape[1] - act_dim - 1
-    npoints = (obs_features - len(values_in) - len(values_out))
+    obs_features = data_tr.shape[1] - act_dim - 1 - 3
 
     # spaces
 
-    obs_space = Box(shape=(npoints * lookback + len(values_in) + len(values_out),), low=-np.inf, high=np.inf)
+    obs_space = Box(shape=(lookback, obs_features), low=-np.inf, high=np.inf)
     act_space = Box(shape=(act_dim,), low=-action_scale, high=action_scale)
 
     # create model
@@ -63,8 +59,6 @@ if __name__ == '__main__':
     model = PPOPolicy(
         obs_space,
         act_space,
-        (npoints * lookback, -1),
-        lookback,
         lambda x: learning_rate,
         vf_trainable=False,
         pi_trainable=False,
@@ -78,40 +72,47 @@ if __name__ == '__main__':
     ntrain = len(data_tr_lens)
     nval = len(data_val_lens)
     print(f'Training on {ntrain} trajectories, validating on {nval}')
+    spl_idx = [3, 3 + io_dim, 3 + io_dim + act_dim, 3 + io_dim + act_dim + 1]
 
     # training batches
 
-    x_tr, y_tr, t_tr = [], [], []
+    r_tr, io_tr, a_tr, t_tr, w_tr = [], [], [], [], []
     nbatches_tr = 0
     idx_start = 0
     batch_idx = 0
     for i, l in enumerate(data_tr_lens):
         idx = np.arange(idx_start, idx_start + l)
-        expert_obs, expert_actions, expert_action_timestamps = data_tr[idx, :obs_features], data_tr[idx, obs_features:obs_features + act_dim], data_tr[idx, obs_features + act_dim]
-        n = len(expert_action_timestamps)
+        expert_r, expert_io, expert_a, expert_t, expert_w = np.split(data_tr[idx, :], spl_idx, axis=1)
+        expert_t = expert_t.flatten()
+        n = len(expert_t)
         nbatches_tr += n
         if n > 0:
-            x_tr.append(expert_obs)
-            y_tr.append(expert_actions)
-            t_tr.append(expert_action_timestamps)
+            r_tr.append(expert_r)
+            io_tr.append(expert_io)
+            a_tr.append(expert_a)
+            t_tr.append(expert_t)
+            w_tr.append(expert_w)
         batch_idx += 1
         idx_start = idx_start + l
 
     # validation batches
 
-    x_val, y_val, t_val = [], [], []
+    r_val, io_val, a_val, t_val, w_val = [], [], [], [], []
     nbatches_val = 0
     idx_start = 0
     batch_idx = 0
     for i, l in enumerate(data_val_lens):
         idx = np.arange(idx_start, idx_start + l)
-        expert_obs, expert_actions, expert_action_timestamps = data_val[idx, :obs_features], data_val[idx, obs_features:obs_features + act_dim], data_val[idx, obs_features + act_dim]
-        n = len(expert_action_timestamps)
+        expert_r, expert_io, expert_a, expert_t, expert_w = np.split(data_val[idx, :], spl_idx, axis=1)
+        expert_t = expert_t.flatten()
+        n = len(expert_t)
         nbatches_val += n
         if n > 0:
-            x_val.append(expert_obs)
-            y_val.append(expert_actions)
-            t_val.append(expert_action_timestamps)
+            r_val.append(expert_r)
+            io_val.append(expert_io)
+            a_val.append(expert_a)
+            t_val.append(expert_t)
+            w_val.append(expert_w)
         batch_idx += 1
         idx_start = idx_start + l
 
@@ -125,14 +126,15 @@ if __name__ == '__main__':
     val_loss_min = np.inf
     best_weights = None
 
-    def generate_batch(x_list, y_list, t_list):
-        n = len(x_list)
-        X, Y = [], []
+    def generate_batch(r_list, io_list, a_list, t_list, w_list):
+        n = len(t_list)
+        X, Y, I = [], [], []
         while len(X) < batch_size:
             traj_idx = np.random.choice(n)
-            l = x_list[traj_idx].shape[0]
+            l = r_list[traj_idx].shape[0]
             idx_action = np.random.choice(l)
             t_action = t_list[traj_idx][idx_action]
+            w_action = w_list[traj_idx][idx_action, :]
             t_start = t_action - lookback * tstep
             t = np.arange(t_start, t_action, tstep)[:lookback]
             t = t[np.where(t >= t_list[traj_idx][0])]
@@ -142,38 +144,42 @@ if __name__ == '__main__':
             else:
                 idx_start = 0
             if idx_start < idx_action and len(t) > 0:
-                x_r = np.zeros((len(t), npoints))
-                for j in range(npoints):
-                    x_r[:, j] = np.interp(t, t_list[traj_idx][idx_start:idx_action], x_list[traj_idx][idx_start:idx_action, j])
-                x_r = np.vstack([x_r, np.zeros((lookback - x_r.shape[0], npoints))])
-                x_io = np.zeros(obs_features - npoints)
-                for j in range(obs_features - npoints):
-                    x_io[j] = np.interp(t[-1], t_list[traj_idx][idx_start:idx_action], x_list[traj_idx][idx_start:idx_action, j + npoints])
-            else:
-                x_r = np.zeros((len(t), npoints))
-                for j in range(npoints):
-                    x_r[:, j] = np.interp(t, t_list[traj_idx][idx_start:idx_action + 1], x_list[traj_idx][idx_start:idx_action+1, j])
-                x_r = np.vstack([x_r, np.zeros((lookback - x_r.shape[0], npoints))])
-                x_io = np.zeros(obs_features - npoints)
-                x_io[: act_dim] = default_action
-                for j in range(obs_features - npoints - act_dim):
-                    x_io[act_dim + j] = np.interp(np.maximum(t_action - tstep, 0), t_list[traj_idx][idx_start:idx_action + 1],
-                                                  x_list[traj_idx][idx_start:idx_action + 1, j + npoints + act_dim])
-            x = np.hstack([x_r.reshape(lookback * npoints), x_io])
-            y = y_list[traj_idx][idx_action, :]
-            X.append(x)
-            Y.append(y)
 
+                # w - xyz
+
+                r_ = np.zeros((len(t), 3))
+                for j in range(3):
+                    r_[:, j] = np.interp(t, t_list[traj_idx][idx_start:idx_action], r_list[traj_idx][idx_start:idx_action, j])
+                r = np.vstack([r_list[traj_idx][0, :] * np.ones(lookback - r_.shape[0])[:, None], r_])
+                r = w_action - r
+
+                # io
+
+                io_ = np.zeros((len(t), io_dim))
+                for j in range(io_dim):
+                    io_[:, j] = np.interp(t, t_list[traj_idx][idx_start:idx_action], io_list[traj_idx][idx_start:idx_action, j])
+                io = np.vstack([io_list[traj_idx][0, :] * np.ones(lookback - io_.shape[0])[:, None], io_])
+
+                # x and y
+
+                x = np.hstack([r, io])
+                y = a_list[traj_idx][idx_action, :]
+                X.append(x)
+                Y.append(y)
+                if len(t) < lookback:
+                    I.append(0)
+                else:
+                    I.append(1)
         X = np.array(X)
         Y = np.vstack(Y)
-        return X, Y
+        I = np.array(I)
+        return X, Y, I
 
     for epoch in range(npretrain):
 
         train_loss = 0.0
         for i in range(nbatches_tr):
-            x, y = generate_batch(x_tr, y_tr, t_tr)
-
+            x, y, _ = generate_batch(r_tr, io_tr, a_tr, t_tr, w_tr)
             with tf.GradientTape() as tape:
                 tape.watch(model.trainable_variables)
                 actions, values, log_probs, action_logits = model.call(x, training=True)
@@ -189,20 +195,22 @@ if __name__ == '__main__':
             model.optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
         val_loss = 0.0
-        dummy_loss = 0.0
+        dummy_loss0 = 0.0
+        dummy_loss1 = 0.0
 
         for _ in range(nbatches_val):
-            x, y = generate_batch(x_val, y_val, t_val)
+            x, y, I = generate_batch(r_val, io_val, a_val, t_val, w_val)
             actions, values, log_probs, action_logits = model.call(x)
             loss = tf.reduce_mean(tf.square(actions - y))
             val_loss += loss
             dummy_actions = dummy_predictor(x)
-            loss = tf.reduce_mean(tf.square(dummy_actions - y))
-            dummy_loss += loss
+            loss_ = np.mean(tf.square(dummy_actions - y), axis=1)
+            dummy_loss0 += np.mean(loss_[np.where(I == 0)[0]])
+            dummy_loss1 += np.mean(loss_[np.where(I == 1)[0]])
 
         val_losses.append(val_loss / nbatches_val)
 
-        print(f'At epoch {epoch + 1}/{npretrain}, train loss is {train_loss / nbatches_tr}, mean validation loss is {np.mean(val_losses)}, patience is {patience_count + 1}/{patience}, dummy loss is {dummy_loss / nbatches_val}')
+        print(f'At epoch {epoch + 1}/{npretrain}, train loss is {train_loss / nbatches_tr}, mean validation loss is {np.mean(val_losses)}, patience is {patience_count + 1}/{patience}, dummy losses are {dummy_loss0 / nbatches_val} and {dummy_loss1 / nbatches_val}')
 
         if np.mean(val_losses) < val_loss_min:
             val_loss_min = np.mean(val_losses)

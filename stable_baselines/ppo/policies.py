@@ -20,16 +20,13 @@ class PPOPolicy(BasePolicy):
     :param ortho_init: (bool) Whether to use or not orthogonal initialization
     :param log_std_init: (float) Initial value for the log standard deviation
     """
-    def __init__(self, observation_space, action_space, feature_split, lookback, learning_rate, net_arch=None, activation_fn=tf.nn.tanh, adam_epsilon=1e-5,
+    def __init__(self, observation_space, action_space, learning_rate, net_arch=None, activation_fn=tf.nn.tanh, adam_epsilon=1e-5,
                  ortho_init=True, log_std_init=0.0, shared_trainable=True, pi_trainable=True, vf_trainable=True, batch_size=None, nsteps=None):
 
         super(PPOPolicy, self).__init__(observation_space, action_space)
 
         self.batch_size = batch_size
         self.nsteps = nsteps
-
-        self.feature_split = feature_split
-        self.lookback = lookback
 
         self.obs_dim = np.prod(self.observation_space.shape)
         self.shared_trainable = shared_trainable
@@ -68,7 +65,7 @@ class PPOPolicy(BasePolicy):
 
     def _build(self, learning_rate):
 
-        self.features_extractor = FeatureExtractor(self.feature_split, self.lookback, net_arch=self.net_arch, activation_fn=self.activation_fn, shared_trainable=self.shared_trainable, vf_trainable=self.vf_trainable, pi_trainable=self.pi_trainable)
+        self.features_extractor = FeatureExtractor(net_arch=self.net_arch, activation_fn=self.activation_fn, shared_trainable=self.shared_trainable, vf_trainable=self.vf_trainable, pi_trainable=self.pi_trainable)
 
         latent_dim_pi = self.features_extractor.latent_dim_pi
 

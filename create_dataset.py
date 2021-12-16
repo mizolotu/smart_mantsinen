@@ -9,7 +9,7 @@ if __name__ == '__main__':
     # prepare training data
 
     trajectory_files = [osp.join(trajectory_dir, fpath) for fpath in os.listdir(trajectory_dir) if fpath.endswith('csv')]
-    bc_train, bc_val, wps, traj_ids, traj_stages, wp_stages, wp_sizes = prepare_trajectories(
+    bc_train, bc_val, wps, traj_ids, traj_stages, traj_sizes = prepare_trajectories(
         signal_dir,
         trajectory_files,
         n_waypoints=nwaypoints,
@@ -28,8 +28,7 @@ if __name__ == '__main__':
     write_csv(bc_train, dataset_dir, 'train.csv')
     write_csv(bc_val, dataset_dir, 'test.csv')
     write_json({
-        'wp_sizes': wp_sizes,
-        'wp_stages': wp_stages,
+        'traj_sizes': traj_sizes,
         'traj_stages': traj_stages,
         'traj_ids': traj_ids
     }, dataset_dir, 'metainfo.json')

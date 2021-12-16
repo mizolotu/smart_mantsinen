@@ -63,7 +63,7 @@ class MantsinenBasic(gym.Env):
         npoints = 1
         ndists = 1
         rew_dim = len(self.signals['reward'])
-        obs_dim = (rew_dim * npoints + ndists) * lookback
+        obs_dim = (rew_dim * npoints + ndists)
         self.rew_min = np.array(mins['reward'])
         self.rew_max = np.array(maxs['reward'])
         self.v_min = np.hstack([self.rew_min - self.rew_max] * lookback)
@@ -88,7 +88,7 @@ class MantsinenBasic(gym.Env):
 
         # set spaces
 
-        self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(obs_dim,), dtype=np.float)
+        self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(lookback, obs_dim), dtype=np.float)
         self.action_space = gym.spaces.Box(low=-scale, high=scale, shape=(act_dim,), dtype=np.float)
 
     def reset(self, init_sleep=0.1):
@@ -142,7 +142,7 @@ class MantsinenBasic(gym.Env):
         wp_nearst, wp_nearest_not_completed = self._calculate_relations_to_wps(xyz)
         obs = self._calculate_obs(xyz, wp_nearest_not_completed)
         print('Obs i:', i_std)
-        print('Obs o:', o_std)
+        #print('Obs o:', o_std)
         return obs
 
     def step(self, action):
@@ -197,7 +197,7 @@ class MantsinenBasic(gym.Env):
         self.o_buff.append(o_std)
         obs = self._calculate_obs(xyz, wp_nearest_not_completed)
         print('Obs i:', i_std)
-        print('Obs o:', o_std)
+        #print('Obs o:', o_std)
         return obs, reward, done, info
 
     def render(self, mode='human', close=False):
@@ -258,18 +258,17 @@ class MantsinenBasic(gym.Env):
         self.rp_to_wp_buff.append(rp_to_wp)
         obs = np.vstack(self.rp_to_wp_buff)
 
+        if self.use_inputs:
+            i = np.vstack(self.i_buff)
+            obs = np.hstack([obs, i])
+        if self.use_outputs:
+            o = np.vstack(self.o_buff)
+            obs = np.hstack([obs, o])
+
         # pad with zeros
 
         zeros = np.zeros((self.lookback - obs.shape[0], obs.shape[1]))
         obs = np.vstack([obs, zeros])
-        obs = obs.reshape(1, -1).flatten()
-
-        if self.use_inputs:
-            i = self.i_buff[-1]
-            obs = np.hstack([obs, i])
-        if self.use_outputs:
-            o = self.o_buff[-1]
-            obs = np.hstack([obs, o])
 
         return obs
 

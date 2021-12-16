@@ -138,10 +138,9 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints, use_inputs=T
     trajectories_tr = []
     trajectories_val = []
     waypoints = []
-    waypoint_stages = []
-    waypoint_sizes = []
     traj_stages = []
     traj_ids = []
+    traj_sizes = []
     rews = []
     val_size = len(trajectory_files) * val_size
     val_size = 1 if val_size < 1 else np.floor(val_size)
@@ -182,9 +181,9 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints, use_inputs=T
         wp_first = wpoints[0, :]
         wp_last = wpoints[-1, :]
 
-        traj_full = []
+        traj = []
         tmin = rew_t[0]
-        switch_wp = False
+
         for i in range(n - 1):
 
             wps_not_completed_idx = np.where(waypoints_completed == 0)[0]
@@ -203,10 +202,12 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints, use_inputs=T
 
             # creating obs
 
-            from_rp_to_nearest_wp_with_lookback = wp_nearest_not_completed - rewards[i, :]
-            from_rp_to_nearest_wp_with_lookback_norm = np.linalg.norm(from_rp_to_nearest_wp_with_lookback)
-            from_rp_to_nearest_wp_with_lookback /= (from_rp_to_nearest_wp_with_lookback_norm + 1e-10)
-            from_rp_to_nearest_wp_with_lookback_norm_std = from_rp_to_nearest_wp_with_lookback_norm / d_max
+            x = rewards[i, :]
+
+            #from_rp_to_nearest_wp_with_lookback = wp_nearest_not_completed - rewards[i, :]
+            #from_rp_to_nearest_wp_with_lookback_norm = np.linalg.norm(from_rp_to_nearest_wp_with_lookback)
+            #from_rp_to_nearest_wp_with_lookback /= (from_rp_to_nearest_wp_with_lookback_norm + 1e-10)
+            #from_rp_to_nearest_wp_with_lookback_norm_std = from_rp_to_nearest_wp_with_lookback_norm / d_max
 
             #from_rp_to_last_wp_with_lookback = wp_last - rp_with_lookback
             #from_rp_to_last_wp_with_lookback_norm = np.linalg.norm(from_rp_to_last_wp_with_lookback, 2, 1)
@@ -218,71 +219,61 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints, use_inputs=T
             #from_rp_to_first_wp_with_lookback /= (from_rp_to_first_wp_with_lookback_norm[:, None] + 1e-10)
             #from_rp_to_first_wp_with_lookback_norm_std = from_rp_to_first_wp_with_lookback_norm / d_max
 
-            from_rp_to_wps_with_lookback = [
+            #from_rp_to_wps_with_lookback = [
                 #from_rp_to_first_wp_with_lookback,
                 #from_rp_to_first_wp_with_lookback_norm_std.reshape(1, 1),
-                from_rp_to_nearest_wp_with_lookback,
-                from_rp_to_nearest_wp_with_lookback_norm_std.reshape(1,),
+            #    from_rp_to_nearest_wp_with_lookback,
+            #    from_rp_to_nearest_wp_with_lookback_norm_std.reshape(1,),
                 #from_rp_to_last_wp_with_lookback,
                 #from_rp_to_last_wp_with_lookback_norm_std.reshape(1, 1)
-            ]
-            traj = np.hstack(
-                from_rp_to_wps_with_lookback
-            )
+            #]
+            #x = np.hstack(
+            #    from_rp_to_wps_with_lookback
+            #)
 
             # add signal values
 
             if use_inputs:
-                traj = np.hstack([traj, is_std[i, :]])
+                x = np.hstack([x, is_std[i, :]])
 
             if use_outputs:
-                traj = np.hstack([traj, os_std[i, :]])
+                x = np.hstack([x, os_std[i, :]])
 
-            traj = traj.reshape(1, -1)
+            x = x.reshape(1, -1)
 
             # add actions
 
-            traj = np.append(traj, inps_scaled[i, :])
+            x = np.append(x, inps_scaled[i, :])
 
             # add timestamp
 
-            traj = np.append(traj, [rew_t[i] - tmin])
+            x = np.append(x, [rew_t[i] - tmin])
+
+            # add waypoint
+
+            x = np.append(x, wp_nearest_not_completed)
 
             # add to full traj
 
-            traj_full.append(traj)
+            traj.append(x)
 
-            # switch wp
-
-            if switch_wp:
-                traj_full = np.vstack(traj_full)
-
-                # add to the lists
-
-                waypoint_sizes.append(len(traj_full.copy()))
-                if len(trajectory_files) > 1:
-                    if ei < len(trajectory_files) - val_size:
-                        trajectories_tr.append(traj_full.copy())
-                        waypoint_stages.append('train')
-                    else:
-                        trajectories_val.append(traj_full.copy())
-                        waypoint_stages.append('test')
-                else:
-                    raise NotImplemented
-
-                traj_full = []
-                switch_wp = False
-
+        traj = np.vstack(traj)
+        traj_sizes.append(traj.shape[0])
         traj_ids.append(int(ti))
+
+        # add to the lists
+
         if len(trajectory_files) > 1:
             if ei < len(trajectory_files) - val_size:
                 traj_stages.append('train')
+                trajectories_tr.append(traj.copy())
             else:
                 traj_stages.append('test')
+                trajectories_val.append(traj.copy())
         else:
             raise NotImplemented
 
-    return np.vstack(trajectories_tr), np.vstack(trajectories_val), waypoints, traj_ids, traj_stages, waypoint_stages, waypoint_sizes
+    return np.vstack(trajectories_tr), np.vstack(trajectories_val), waypoints, traj_ids, traj_stages, traj_sizes
 
 def load_waypoints_and_meta(waypoints_dir, dataset_dir):
     wp_files = [osp.join(waypoints_dir, fpath) for fpath in os.listdir(waypoints_dir) if fpath.endswith('txt')]
@@ -291,9 +282,9 @@ def load_waypoints_and_meta(waypoints_dir, dataset_dir):
         waypoints.append(read_csv(waypoints_dir, f'wps{i + 1}.txt'))
     meta = read_json(dataset_dir, 'metainfo.json')
     tr_waypoints = [wp for wp, wp_stage in zip(waypoints, meta['traj_stages']) if wp_stage == 'train']
-    tr_traj_sizes = [s for s, wp_stage in zip(meta['wp_sizes'], meta['wp_stages']) if wp_stage == 'train']
+    tr_traj_sizes = [s for s, wp_stage in zip(meta['traj_sizes'], meta['traj_stages']) if wp_stage == 'train']
     te_waypoints = [wp for wp, wp_stage in zip(waypoints, meta['traj_stages']) if wp_stage == 'test']
-    te_traj_sizes = [s for s, wp_stage in zip(meta['wp_sizes'], meta['wp_stages']) if wp_stage == 'test']
+    te_traj_sizes = [s for s, wp_stage in zip(meta['traj_sizes'], meta['traj_stages']) if wp_stage == 'test']
     return tr_waypoints, te_waypoints, tr_traj_sizes, te_traj_sizes
 
 def get_test_waypoints(fname):

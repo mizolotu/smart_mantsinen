@@ -5,7 +5,7 @@ import numpy as np
 from common.data_utils import load_signals, save_trajectory, parse_conditional_signals, is_moving, is_acting
 from common.solver_utils import get_solver_path, start_solver, stop_solver
 from common.server_utils import is_server_running, is_backend_registered, post_signals, post_action, get_state
-from config import default_actions, trajectory_dir, signal_dir
+from config import null_action, default_action, trajectory_dir, signal_dir, lookback, tstep
 
 from collections import deque
 from time import sleep
@@ -21,7 +21,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-m', '--model', help='File path to the model.', default='C:\\Users\\mevea\\MeveaModels\\Mantsinen\\Models\\Mantsinen300M\\300M_fixed.mvs')
     parser.add_argument('-s', '--server', help='Server URL.', default='http://127.0.0.1:5000')
-    parser.add_argument('-o', '--output', help='Output file.', default='trajectory1.csv')
+    parser.add_argument('-o', '--output', help='Output file.', default='trajectory35.csv')
     parser.add_argument('-d', '--debug', help='Debug.', default=False, type=bool)
     args = parser.parse_args()
 
@@ -81,29 +81,47 @@ if __name__ == '__main__':
     timestamps = []
     moving, acting = False, False
     last_t_state, move_t_start = None, None
+    buff_size = 100
+    last_states = deque(maxlen=buff_size)
+    last_t_states = deque(maxlen=buff_size)
+    last_rewards = deque(maxlen=buff_size)
 
-    last_states = deque(maxlen=1000)
-
-    while not (moving and acting):
+    while not acting:
         post_action(args.server, backend_id, None, conditional_values, next_simulation_time=0)
         state, reward, conditional_values, t_state_real, t_state_simulation, _ = get_state(args.server, backend_id, last_state_time=0)
         moving = is_moving(conditional_signals, conditional_values, t_state_simulation)
-        acting = is_acting(signals, state, default_actions)
-        if moving and acting:
+        acting = is_acting(signals, state, values_to_avoid=[null_action, default_action])
+        if acting:
+            for ls, lts, lr in zip(last_states, last_t_states, last_rewards):
+                if lts > t_state_simulation - lookback * tstep:
+                    timestamps.append(lts)
+                    states.append(ls)
+                    rewards.append(lr)
+                    is_acting_list.append(True)
             timestamps.append(t_state_simulation)
             states.append(state)
             rewards.append(reward)
             is_acting_list.append(True)
-            print(state)
-            for ls in last_states:
-                print(ls)
-        last_time = t_state_simulation
+
         last_states.append(state)
-        last_reward = reward
+        last_t_states.append(t_state_simulation)
+        last_rewards.append(reward)
+
+    print(f'Acting: {acting}, moving: {moving}')
 
     print('Recording the trajectory...')
 
-    # record the trajectory and wait for the moving to stop
+    while (acting and not moving):
+        post_action(args.server, backend_id, None, conditional_values, next_simulation_time=0)
+        state, reward, conditional_values, t_state_real, t_state_simulation, _ = get_state(args.server, backend_id, last_state_time=0)
+        moving = is_moving(conditional_signals, conditional_values, t_state_simulation)
+        acting = is_acting(signals, state, values_to_avoid=[null_action, default_action])
+        timestamps.append(t_state_simulation)
+        states.append(state)
+        rewards.append(reward)
+        is_acting_list.append(True)
+
+    print(f'Acting: {acting}, moving: {moving}')
 
     moving = True
     while moving:
@@ -115,7 +133,7 @@ if __name__ == '__main__':
                 states.append(state)
                 rewards.append(reward)
                 timestamps.append(t_state_simulation)
-                is_acting_list.append(is_acting(signals, state, default_actions))
+                is_acting_list.append(is_acting(signals, state, values_to_avoid=[null_action, default_action]))
 
     # last acting
 

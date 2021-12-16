@@ -28,7 +28,7 @@ from common.solver_utils import get_solver_path, start_solver, stop_solver
 
 class PPOD(BaseRLModel):
 
-    def __init__(self, policy, env, n_env_train, npoints, lookback,
+    def __init__(self, policy, env, n_env_train,
                  learning_rate=2.5e-4, n_steps=2048, batch_size=64, n_epochs=32,
                  gamma=0.99, gae_lambda=0.95, clip_range=0.1, clip_range_vf=None,
                  ent_coef=0.0, vf_coef=0.5, max_grad_norm=0.5,
@@ -39,8 +39,6 @@ class PPOD(BaseRLModel):
         super(PPOD, self).__init__(policy, env, PPOPolicy, policy_kwargs=policy_kwargs, verbose=verbose, create_eval_env=create_eval_env, support_multi_env=True, seed=seed)
 
         self.n_envs_train = n_env_train
-        self.feature_split = [npoints * lookback, - 1]
-        self.lookback = lookback
 
         self.learning_rate = learning_rate
         self.batch_size = batch_size
@@ -136,7 +134,7 @@ class PPOD(BaseRLModel):
         #    self.observation_space, self.action_space, self.learning_rate, **self.policy_kwargs, shared_trainable=False, batch_size=self.n_envs_train
         #)
         self.policy = self.policy_class(
-            self.observation_space, self.action_space, self.feature_split, self.lookback, self.learning_rate, **self.policy_kwargs, shared_trainable=False
+            self.observation_space, self.action_space, self.learning_rate, **self.policy_kwargs, shared_trainable=False
         )
         self.policy.summary()
 
@@ -474,19 +472,17 @@ class PPOD(BaseRLModel):
         if hasattr(self.policy, 'log_std'):
             logger.logkv("std", tf.exp(self.policy.log_std).numpy().mean())
 
-    def pretrain(self, data_tr, data_val, data_tr_lens, data_val_lens, tstep, default_action, nepochs=10000, patience=100):
+    def pretrain(self, data_tr, data_val, data_tr_lens, data_val_lens, tstep, nepochs=10000, patience=100):
 
         self.pretrain_policy = self.policy_class(
-            self.observation_space, self.action_space, self.feature_split, self.lookback, self.learning_rate,  **self.policy_kwargs, pi_trainable=False, vf_trainable=False
+            self.observation_space, self.action_space, self.learning_rate,  **self.policy_kwargs, pi_trainable=False, vf_trainable=False
         )
         self.pretrain_policy.summary()
 
-        obs_dim = self.observation_space.shape[0]
-        inout_dim = obs_dim - self.feature_split[0]
-        obs_features = inout_dim + self.feature_split[0] // self.lookback
+        lookback = self.observation_space.shape[0]
+        obs_features = self.observation_space.shape[1]
 
         act_dim = self.action_space.shape[0]
-        npoints = self.feature_split[0] // self.lookback
 
         assert data_tr.shape[1] == obs_features + act_dim + 1, 'Incorrect training data shape'
         assert data_val.shape[1] == obs_features + act_dim + 1, 'Incorrect validation data shape'
@@ -549,8 +545,8 @@ class PPOD(BaseRLModel):
                 l = x_list[traj_idx].shape[0]
                 idx_action = np.random.choice(l)
                 t_action = t_list[traj_idx][idx_action]
-                t_start = t_action - self.lookback * tstep
-                t = np.arange(t_start, t_action, tstep)[:self.lookback]
+                t_start = t_action - lookback * tstep
+                t = np.arange(t_start, t_action, tstep)[:lookback]
                 t = t[np.where(t >= t_list[traj_idx][0])]
                 t_idx = np.where(t_list[traj_idx] < t_start)[0]
                 if len(t_idx) > 0:
@@ -558,27 +554,13 @@ class PPOD(BaseRLModel):
                 else:
                     idx_start = 0
                 if idx_start < idx_action and len(t) > 0:
-                    x_r = np.zeros((len(t), npoints))
-                    for j in range(npoints):
-                        x_r[:, j] = np.interp(t, t_list[traj_idx][idx_start:idx_action], x_list[traj_idx][idx_start:idx_action, j])
-                    x_r = np.vstack([x_r, np.zeros((self.lookback - x_r.shape[0], npoints))])
-                    x_io = np.zeros(obs_features - npoints)
-                    for j in range(obs_features - npoints):
-                        x_io[j] = np.interp(t[-1], t_list[traj_idx][idx_start:idx_action], x_list[traj_idx][idx_start:idx_action, j + npoints])
-                else:
-                    x_r = np.zeros((len(t), npoints))
-                    for j in range(npoints):
-                        x_r[:, j] = np.interp(t, t_list[traj_idx][idx_start:idx_action + 1], x_list[traj_idx][idx_start:idx_action + 1, j])
-                    x_r = np.vstack([x_r, np.zeros((self.lookback - x_r.shape[0], npoints))])
-                    x_io = np.zeros(obs_features - npoints)
-                    x_io[:act_dim] = default_action
-                    for j in range(obs_features - npoints - act_dim):
-                        x_io[j + act_dim] = np.interp(np.maximum(t_action - tstep, 0), t_list[traj_idx][idx_start:idx_action + 1], x_list[traj_idx][idx_start:idx_action + 1, j + npoints + act_dim])
-
-                x = np.hstack([x_r.reshape(self.lookback * npoints), x_io])
-                y = y_list[traj_idx][idx_action, :]
-                X.append(x)
-                Y.append(y)
+                    x_ = np.zeros((len(t), obs_features))
+                    for j in range(obs_features):
+                        x_[:, j] = np.interp(t, t_list[traj_idx][idx_start:idx_action], x_list[traj_idx][idx_start:idx_action, j])
+                    x = np.vstack([x_, np.zeros((lookback - x_.shape[0], obs_features))])
+                    y = y_list[traj_idx][idx_action, :]
+                    X.append(x)
+                    Y.append(y)
 
             X = np.array(X)
             Y = np.vstack(Y)
@@ -588,7 +570,6 @@ class PPOD(BaseRLModel):
 
             train_loss = 0.0
             for i in range(nbatches_tr):
-                #print(f'{i}/{nbatches_tr}')
                 x, y = generate_batch(x_tr, y_tr, t_tr)
                 with tf.GradientTape() as tape:
                     tape.watch(self.pretrain_policy.trainable_variables)
