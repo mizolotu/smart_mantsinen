@@ -193,12 +193,15 @@ if __name__ == '__main__':
         t_start = time()
 
         train_loss = 0.0
+        tr_loss_list = []
+
         for x, y, _ in batches_tr:
             with tf.GradientTape() as tape:
                 tape.watch(model.trainable_variables)
                 actions, values, log_probs, action_logits = model.call(x, training=True)
                 loss = tf.reduce_mean(tf.square(actions - y))
             train_loss += loss
+            tr_loss_list.append(loss)
 
             # Optimization step
 
@@ -211,11 +214,13 @@ if __name__ == '__main__':
         val_loss = 0.0
         dummy_loss0 = 0.0
         dummy_loss1 = 0.0
+        val_loss_list = []
 
         for x, y, I in batches_val:
             actions, values, log_probs, action_logits = model.call(x)
             loss = tf.reduce_mean(tf.square(actions - y))
             val_loss += loss
+            val_loss_list.append(loss)
             dummy_actions = dummy_predictor(x)
             loss_ = np.mean(tf.square(dummy_actions - y), axis=1)
             idx0 = np.where(I == 0)[0]
@@ -231,10 +236,12 @@ if __name__ == '__main__':
 
         # generate one new training and validation batch and substitute the oldest batch
 
-        del batches_tr[0]
+        print(np.argmin(tr_loss_list), np.min(tr_loss_list))
+        print(np.argmin(val_loss_list), np.min(val_loss_list))
+        del batches_tr[np.argmin(tr_loss_list)]
         x, y, I = generate_batch(r_tr, io_tr, a_tr, t_tr, w_tr)
         batches_tr.append((x, y, I))
-        del batches_val[0]
+        del batches_val[np.argmin(val_loss_list)]
         x, y, I = generate_batch(r_val, io_val, a_val, t_val, w_val)
         batches_val.append((x, y, I))
 
