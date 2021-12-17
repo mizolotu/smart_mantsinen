@@ -35,7 +35,7 @@ class MantsinenBasic(gym.Env):
         self.wp_size = wp_size
         self.wps_completed = np.zeros(self.waypoints.shape[0])
 
-        self.rp_to_wp_buff = deque(maxlen=lookback)
+        self.r_buff = deque(maxlen=lookback)
         self.i_buff = deque(maxlen=lookback)
         self.o_buff = deque(maxlen=lookback)
 
@@ -60,15 +60,13 @@ class MantsinenBasic(gym.Env):
 
         # dimensions and standardization coefficients
 
-        npoints = 1
-        ndists = 1
         rew_dim = len(self.signals['reward'])
-        obs_dim = (rew_dim * npoints + ndists)
-        self.rew_min = np.array(mins['reward'])
-        self.rew_max = np.array(maxs['reward'])
-        self.v_min = np.hstack([self.rew_min - self.rew_max] * lookback)
-        self.v_max = np.hstack([self.rew_max - self.rew_min] * lookback)
-        self.d_max = np.linalg.norm(self.rew_max - self.rew_min)
+        obs_dim = rew_dim
+        #self.rew_min = np.array(mins['reward'])
+        #self.rew_max = np.array(maxs['reward'])
+        #self.v_min = np.hstack([self.rew_min - self.rew_max] * lookback)
+        #self.v_max = np.hstack([self.rew_max - self.rew_min] * lookback)
+        #self.d_max = np.linalg.norm(self.rew_max - self.rew_min)
         self.obs_input_min = np.array(mins['input'])
         self.obs_input_max = np.array(maxs['input'])
         self.obs_output_min = np.array(mins['output'])
@@ -114,17 +112,21 @@ class MantsinenBasic(gym.Env):
 
         # clear and fill observation buffers
 
-        self.rp_to_wp_buff.clear()
+        self.r_buff.clear()
         self.i_buff.clear()
         self.o_buff.clear()
-        input_output_obs, reward_components, last_state_time, crashed = self._get_state()
-        xyz = np.array(reward_components)
-        i = np.array(input_output_obs)[self.obs_input_index]
-        i_std = self._std_vector(i, self.obs_input_min, self.obs_input_max)
-        self.i_buff.append(i_std)
-        o = np.array(input_output_obs)[self.obs_output_index]
-        o_std = self._std_vector(o, self.obs_output_min, self.obs_output_max)
-        self.o_buff.append(o_std)
+
+        for i in range(self.lookback):
+            input_output_obs, reward_components, last_state_time, crashed = self._get_state()
+            xyz = np.array(reward_components)
+            self.r_buff.append(xyz)
+            i = np.array(input_output_obs)[self.obs_input_index]
+            i_std = self._std_vector(i, self.obs_input_min, self.obs_input_max)
+            self.i_buff.append(i_std)
+            o = np.array(input_output_obs)[self.obs_output_index]
+            o_std = self._std_vector(o, self.obs_output_min, self.obs_output_max)
+            self.o_buff.append(o_std)
+            sleep(self.tstep)
 
         # update simulation times
 
@@ -140,9 +142,8 @@ class MantsinenBasic(gym.Env):
         # calculate obs
 
         wp_nearst, wp_nearest_not_completed = self._calculate_relations_to_wps(xyz)
-        obs = self._calculate_obs(xyz, wp_nearest_not_completed)
-        print('Obs i:', i_std)
-        #print('Obs o:', o_std)
+        obs = self._calculate_obs(wp_nearest_not_completed)
+
         return obs
 
     def step(self, action):
@@ -170,6 +171,7 @@ class MantsinenBasic(gym.Env):
         # calculate reward
 
         xyz = np.array(reward_components)
+        self.r_buff.append(xyz)
         wp_nearst, wp_nearest_not_completed = self._calculate_relations_to_wps(xyz)
         reward, done, info, switch_wp = self._calculate_reward(xyz)
         self.reward += reward
@@ -180,13 +182,6 @@ class MantsinenBasic(gym.Env):
             print(id, 'Crashed :(')
             done = True
 
-        # switch wp
-
-        if switch_wp:
-            self.rp_to_wp_buff.clear()
-            self.i_buff.clear()
-            self.o_buff.clear()
-
         # calculate new obs
 
         i = np.array(input_output_obs)[self.obs_input_index]
@@ -195,9 +190,7 @@ class MantsinenBasic(gym.Env):
         o = np.array(input_output_obs)[self.obs_output_index]
         o_std = self._std_vector(o, self.obs_output_min, self.obs_output_max)
         self.o_buff.append(o_std)
-        obs = self._calculate_obs(xyz, wp_nearest_not_completed)
-        print('Obs i:', i_std)
-        #print('Obs o:', o_std)
+        obs = self._calculate_obs(wp_nearest_not_completed)
         return obs, reward, done, info
 
     def render(self, mode='human', close=False):
@@ -229,34 +222,10 @@ class MantsinenBasic(gym.Env):
             wp_nearest_not_completed = self.waypoints[-1, :]
         return wp_nearest, wp_nearest_not_completed
 
-    def _calculate_obs(self, xyz, wp_nearest_not_completed):
+    def _calculate_obs(self, wp_nearest_not_completed):
 
-        from_rp_to_wp_first = self.waypoints[0, :] - xyz
-        from_rp_to_wp_first_norm = np.linalg.norm(from_rp_to_wp_first)
-        from_rp_to_wp_first /= (from_rp_to_wp_first_norm + 1e-10)
-        from_rp_to_wp_first_norm_std = from_rp_to_wp_first_norm / self.d_max
-
-        from_rp_to_wp_nearest = wp_nearest_not_completed - xyz
-        from_rp_to_wp_nearest_norm = np.linalg.norm(from_rp_to_wp_nearest)
-        from_rp_to_wp_nearest /= (from_rp_to_wp_nearest_norm + 1e-10)
-        from_rp_to_wp_nearest_norm_std = from_rp_to_wp_nearest_norm / self.d_max
-
-        from_rp_to_wp_last = self.waypoints[-1, :] - xyz
-        from_rp_to_wp_last_norm = np.linalg.norm(from_rp_to_wp_last)
-        from_rp_to_wp_last /= (from_rp_to_wp_last_norm + 1e-10)
-        from_rp_to_wp_last_norm_std = from_rp_to_wp_last_norm / self.d_max
-
-        rp_to_wp = np.hstack([
-            #from_rp_to_wp_first,
-            #from_rp_to_wp_first_norm_std,
-            from_rp_to_wp_nearest,
-            from_rp_to_wp_nearest_norm_std,
-            #from_rp_to_wp_last,
-            #from_rp_to_wp_last_norm_std
-        ])
-
-        self.rp_to_wp_buff.append(rp_to_wp)
-        obs = np.vstack(self.rp_to_wp_buff)
+        obs = np.vstack(self.r_buff)
+        obs = wp_nearest_not_completed - obs
 
         if self.use_inputs:
             i = np.vstack(self.i_buff)
@@ -264,11 +233,6 @@ class MantsinenBasic(gym.Env):
         if self.use_outputs:
             o = np.vstack(self.o_buff)
             obs = np.hstack([obs, o])
-
-        # pad with zeros
-
-        zeros = np.zeros((self.lookback - obs.shape[0], obs.shape[1]))
-        obs = np.vstack([obs, zeros])
 
         return obs
 

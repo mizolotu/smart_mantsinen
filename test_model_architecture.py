@@ -8,6 +8,7 @@ from config import ppo_net_arch, waypoints_dir, dataset_dir, signal_dir, lookbac
 from stable_baselines.ppo.policies import PPOPolicy
 from common.data_utils import read_csv, load_waypoints_and_meta, load_signals
 from gym.spaces import Box
+from time import time
 
 def dummy_predictor(x):
     actions = []
@@ -22,7 +23,7 @@ if __name__ == '__main__':
     # parse args
 
     parser = arp.ArgumentParser()
-    parser.add_argument('-g', '--gpu', help='GPU')
+    parser.add_argument('-g', '--gpu', help='GPU', default='-1')
     args = parser.parse_args()
 
     # gpu
@@ -121,6 +122,7 @@ if __name__ == '__main__':
 
     print(f'Number of training batches: {nbatches_tr}, number of validation batches: {nbatches_val}')
 
+    batch_generation_freq = 100
     val_losses = deque(maxlen=10)
     patience_count = 0
     val_loss_min = np.inf
@@ -175,11 +177,24 @@ if __name__ == '__main__':
         I = np.array(I)
         return X, Y, I
 
+    # training
+
     for epoch in range(npretrain):
 
+        t_start = time()
+
+        if epoch % batch_generation_freq == 0:
+            batches_tr, batches_val = [], []
+            for i in range(nbatches_tr):
+                x, y, I = generate_batch(r_tr, io_tr, a_tr, t_tr, w_tr)
+                batches_tr.append((x, y, I))
+            for i in range(nbatches_val):
+                x, y, I = generate_batch(r_val, io_val, a_val, t_val, w_val)
+                batches_val.append((x, y, I))
+
         train_loss = 0.0
-        for i in range(nbatches_tr):
-            x, y, _ = generate_batch(r_tr, io_tr, a_tr, t_tr, w_tr)
+        for x, y, _ in batches_tr:
+            #x, y, _ = generate_batch(r_tr, io_tr, a_tr, t_tr, w_tr)
             with tf.GradientTape() as tape:
                 tape.watch(model.trainable_variables)
                 actions, values, log_probs, action_logits = model.call(x, training=True)
@@ -198,19 +213,23 @@ if __name__ == '__main__':
         dummy_loss0 = 0.0
         dummy_loss1 = 0.0
 
-        for _ in range(nbatches_val):
-            x, y, I = generate_batch(r_val, io_val, a_val, t_val, w_val)
+        for x, y, I in batches_val:
+            #x, y, I = generate_batch(r_val, io_val, a_val, t_val, w_val)
             actions, values, log_probs, action_logits = model.call(x)
             loss = tf.reduce_mean(tf.square(actions - y))
             val_loss += loss
             dummy_actions = dummy_predictor(x)
             loss_ = np.mean(tf.square(dummy_actions - y), axis=1)
-            dummy_loss0 += np.mean(loss_[np.where(I == 0)[0]])
-            dummy_loss1 += np.mean(loss_[np.where(I == 1)[0]])
+            idx0 = np.where(I == 0)[0]
+            idx1 = np.where(I == 1)[0]
+            if len(idx0) > 0:
+                dummy_loss0 += np.mean(loss_[idx0])
+            if len(idx1) > 0:
+                dummy_loss1 += np.mean(loss_[idx1])
 
         val_losses.append(val_loss / nbatches_val)
 
-        print(f'At epoch {epoch + 1}/{npretrain}, train loss is {train_loss / nbatches_tr}, mean validation loss is {np.mean(val_losses)}, patience is {patience_count + 1}/{patience}, dummy losses are {dummy_loss0 / nbatches_val} and {dummy_loss1 / nbatches_val}')
+        print(f'At epoch {epoch + 1}/{npretrain}, train loss is {train_loss / nbatches_tr}, mean validation loss is {np.mean(val_losses)}, patience is {patience_count + 1}/{patience}, dummy losses are {dummy_loss0 / nbatches_val} and {dummy_loss1 / nbatches_val}, time elapsed: {time() - t_start}')
 
         if np.mean(val_losses) < val_loss_min:
             val_loss_min = np.mean(val_losses)

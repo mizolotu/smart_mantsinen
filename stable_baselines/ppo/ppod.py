@@ -484,46 +484,55 @@ class PPOD(BaseRLModel):
 
         act_dim = self.action_space.shape[0]
 
-        assert data_tr.shape[1] == obs_features + act_dim + 1, 'Incorrect training data shape'
-        assert data_val.shape[1] == obs_features + act_dim + 1, 'Incorrect validation data shape'
+        assert data_tr.shape[1] == obs_features + act_dim + 1 + 3, 'Incorrect training data shape'
+        assert data_val.shape[1] == obs_features + act_dim + 1 + 3, 'Incorrect validation data shape'
 
         ntrain = len(data_tr_lens)
         nval = len(data_val_lens)
         print(f'Training on {ntrain} trajectories, validating on {nval}')
+        io_dim = obs_features - 3
+        print(io_dim)
+        spl_idx = [3, 3 + io_dim, 3 + io_dim + act_dim, 3 + io_dim + act_dim + 1]
 
         # training batches
 
-        x_tr, y_tr, t_tr = [], [], []
+        r_tr, io_tr, a_tr, t_tr, w_tr = [], [], [], [], []
         nbatches_tr = 0
         idx_start = 0
         batch_idx = 0
         for i, l in enumerate(data_tr_lens):
             idx = np.arange(idx_start, idx_start + l)
-            expert_obs, expert_actions, expert_action_timestamps = data_tr[idx, :obs_features], data_tr[idx, obs_features:obs_features + act_dim], data_tr[idx, obs_features + act_dim]
-            n = len(expert_action_timestamps)
+            expert_r, expert_io, expert_a, expert_t, expert_w = np.split(data_tr[idx, :], spl_idx, axis=1)
+            expert_t = expert_t.flatten()
+            n = len(expert_t)
             nbatches_tr += n
             if n > 0:
-                x_tr.append(expert_obs)
-                y_tr.append(expert_actions)
-                t_tr.append(expert_action_timestamps)
+                r_tr.append(expert_r)
+                io_tr.append(expert_io)
+                a_tr.append(expert_a)
+                t_tr.append(expert_t)
+                w_tr.append(expert_w)
             batch_idx += 1
             idx_start = idx_start + l
 
         # validation batches
 
-        x_val, y_val, t_val = [], [], []
+        r_val, io_val, a_val, t_val, w_val = [], [], [], [], []
         nbatches_val = 0
         idx_start = 0
         batch_idx = 0
         for i, l in enumerate(data_val_lens):
             idx = np.arange(idx_start, idx_start + l)
-            expert_obs, expert_actions, expert_action_timestamps = data_val[idx, :obs_features], data_val[idx, obs_features:obs_features + act_dim], data_val[idx, obs_features + act_dim]
-            n = len(expert_action_timestamps)
+            expert_r, expert_io, expert_a, expert_t, expert_w = np.split(data_val[idx, :], spl_idx, axis=1)
+            expert_t = expert_t.flatten()
+            n = len(expert_t)
             nbatches_val += n
             if n > 0:
-                x_val.append(expert_obs)
-                y_val.append(expert_actions)
-                t_val.append(expert_action_timestamps)
+                r_val.append(expert_r)
+                io_val.append(expert_io)
+                a_val.append(expert_a)
+                t_val.append(expert_t)
+                w_val.append(expert_w)
             batch_idx += 1
             idx_start = idx_start + l
 
@@ -537,14 +546,15 @@ class PPOD(BaseRLModel):
         val_loss_min = np.inf
         best_weights = None
 
-        def generate_batch(x_list, y_list, t_list):
-            n = len(x_list)
-            X, Y = [], []
+        def generate_batch(r_list, io_list, a_list, t_list, w_list):
+            n = len(t_list)
+            X, Y, I = [], [], []
             while len(X) < self.batch_size:
                 traj_idx = np.random.choice(n)
-                l = x_list[traj_idx].shape[0]
+                l = r_list[traj_idx].shape[0]
                 idx_action = np.random.choice(l)
                 t_action = t_list[traj_idx][idx_action]
+                w_action = w_list[traj_idx][idx_action, :]
                 t_start = t_action - lookback * tstep
                 t = np.arange(t_start, t_action, tstep)[:lookback]
                 t = t[np.where(t >= t_list[traj_idx][0])]
@@ -554,23 +564,42 @@ class PPOD(BaseRLModel):
                 else:
                     idx_start = 0
                 if idx_start < idx_action and len(t) > 0:
-                    x_ = np.zeros((len(t), obs_features))
-                    for j in range(obs_features):
-                        x_[:, j] = np.interp(t, t_list[traj_idx][idx_start:idx_action], x_list[traj_idx][idx_start:idx_action, j])
-                    x = np.vstack([x_, np.zeros((lookback - x_.shape[0], obs_features))])
-                    y = y_list[traj_idx][idx_action, :]
+
+                    # w - xyz
+
+                    r_ = np.zeros((len(t), 3))
+                    for j in range(3):
+                        r_[:, j] = np.interp(t, t_list[traj_idx][idx_start:idx_action], r_list[traj_idx][idx_start:idx_action, j])
+                    r = np.vstack([r_list[traj_idx][0, :] * np.ones(lookback - r_.shape[0])[:, None], r_])
+                    r = w_action - r
+
+                    # io
+
+                    io_ = np.zeros((len(t), io_dim))
+                    for j in range(io_dim):
+                        io_[:, j] = np.interp(t, t_list[traj_idx][idx_start:idx_action], io_list[traj_idx][idx_start:idx_action, j])
+                    io = np.vstack([io_list[traj_idx][0, :] * np.ones(lookback - io_.shape[0])[:, None], io_])
+
+                    # x and y
+
+                    x = np.hstack([r, io])
+                    y = a_list[traj_idx][idx_action, :]
                     X.append(x)
                     Y.append(y)
-
+                    if len(t) < lookback:
+                        I.append(0)
+                    else:
+                        I.append(1)
             X = np.array(X)
             Y = np.vstack(Y)
-            return X, Y
+            I = np.array(I)
+            return X, Y, I
 
         for epoch in range(nepochs):
 
             train_loss = 0.0
             for i in range(nbatches_tr):
-                x, y = generate_batch(x_tr, y_tr, t_tr)
+                x, y, _ = generate_batch(r_tr, io_tr, a_tr, t_tr, w_tr)
                 with tf.GradientTape() as tape:
                     tape.watch(self.pretrain_policy.trainable_variables)
                     actions, values, log_probs, action_logits = self.pretrain_policy.call(x, training=True)
@@ -591,7 +620,7 @@ class PPOD(BaseRLModel):
             val_loss = 0.0
 
             for _ in range(nbatches_val):
-                x, y = generate_batch(x_val, y_val, t_val)
+                x, y, _ = generate_batch(r_val, io_val, a_val, t_val, w_val)
                 actions, values, log_probs, action_logits = self.pretrain_policy.call(x)
                 if isinstance(self.action_space, spaces.Discrete):
                     loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y, logits=action_logits))
