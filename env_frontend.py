@@ -147,7 +147,7 @@ class MantsinenBasic(gym.Env):
         return obs
 
     def step(self, action):
-        print('Action:', action)
+        #print('Action:', action)
 
         # set action
 
