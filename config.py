@@ -28,7 +28,7 @@ lookback = 4
 tstep = 0.01
 bonus = 10
 nwaypoints = 16
-validation_size = 0.1
+validation_size = 0.2
 ppo_net_arch = [
     #('conv1d', 256, 4, 1, 'same'), ('conv1d', 512, 4, 1, 'same'), ('dense', 1024),
     #('conv1d', 256, 10, 5, 'valid'), ('lstm', 256, False), ('dense', 512),
