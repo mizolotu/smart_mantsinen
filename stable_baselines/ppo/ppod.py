@@ -606,6 +606,8 @@ class PPOD(BaseRLModel):
         for epoch in range(nepochs):
 
             train_loss = 0.0
+            tr_loss_list = []
+
             for x, y, _ in batches_tr:
                 with tf.GradientTape() as tape:
                     tape.watch(self.pretrain_policy.trainable_variables)
@@ -615,6 +617,7 @@ class PPOD(BaseRLModel):
                     elif isinstance(self.action_space, spaces.Box):
                         loss = tf.reduce_mean(tf.square(actions - y))
                 train_loss += loss
+                tr_loss_list.append(loss)
 
                 # Optimization step
 
@@ -625,6 +628,7 @@ class PPOD(BaseRLModel):
                 self.pretrain_policy.optimizer.apply_gradients(zip(gradients, self.pretrain_policy.trainable_variables))
 
             val_loss = 0.0
+            val_loss_list = []
 
             for x, y, I in batches_val:
                 actions, values, log_probs, action_logits = self.pretrain_policy.call(x)
@@ -633,6 +637,7 @@ class PPOD(BaseRLModel):
                 elif isinstance(self.action_space, spaces.Box):
                     loss = tf.reduce_mean(tf.square(actions - y))
                 val_loss += loss
+                val_loss_list.append(loss)
 
             val_losses.append(val_loss / nbatches_val)
 
@@ -640,10 +645,10 @@ class PPOD(BaseRLModel):
 
             # generate one new training and validation batch and substitute the oldest batch
 
-            del batches_tr[0]
+            del batches_tr[np.argmin(tr_loss_list)]
             x, y, I = generate_batch(r_tr, io_tr, a_tr, t_tr, w_tr)
             batches_tr.append((x, y, I))
-            del batches_val[0]
+            del batches_val[np.argmin(val_loss_list)]
             x, y, I = generate_batch(r_val, io_val, a_val, t_val, w_val)
             batches_val.append((x, y, I))
 

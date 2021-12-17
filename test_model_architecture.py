@@ -236,8 +236,6 @@ if __name__ == '__main__':
 
         # generate one new training and validation batch and substitute the oldest batch
 
-        print(np.argmin(tr_loss_list), np.min(tr_loss_list))
-        print(np.argmin(val_loss_list), np.min(val_loss_list))
         del batches_tr[np.argmin(tr_loss_list)]
         x, y, I = generate_batch(r_tr, io_tr, a_tr, t_tr, w_tr)
         batches_tr.append((x, y, I))
