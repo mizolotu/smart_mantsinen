@@ -122,7 +122,6 @@ if __name__ == '__main__':
 
     print(f'Number of training batches: {nbatches_tr}, number of validation batches: {nbatches_val}')
 
-    batch_generation_freq = 100
     val_losses = deque(maxlen=10)
     patience_count = 0
     val_loss_min = np.inf
@@ -177,24 +176,24 @@ if __name__ == '__main__':
         I = np.array(I)
         return X, Y, I
 
+    # generate batches
+
+    batches_tr, batches_val = [], []
+    for i in range(nbatches_tr):
+        x, y, I = generate_batch(r_tr, io_tr, a_tr, t_tr, w_tr)
+        batches_tr.append((x, y, I))
+    for i in range(nbatches_val):
+        x, y, I = generate_batch(r_val, io_val, a_val, t_val, w_val)
+        batches_val.append((x, y, I))
+
     # training
 
     for epoch in range(npretrain):
 
         t_start = time()
 
-        if epoch % batch_generation_freq == 0:
-            batches_tr, batches_val = [], []
-            for i in range(nbatches_tr):
-                x, y, I = generate_batch(r_tr, io_tr, a_tr, t_tr, w_tr)
-                batches_tr.append((x, y, I))
-            for i in range(nbatches_val):
-                x, y, I = generate_batch(r_val, io_val, a_val, t_val, w_val)
-                batches_val.append((x, y, I))
-
         train_loss = 0.0
         for x, y, _ in batches_tr:
-            #x, y, _ = generate_batch(r_tr, io_tr, a_tr, t_tr, w_tr)
             with tf.GradientTape() as tape:
                 tape.watch(model.trainable_variables)
                 actions, values, log_probs, action_logits = model.call(x, training=True)
@@ -214,7 +213,6 @@ if __name__ == '__main__':
         dummy_loss1 = 0.0
 
         for x, y, I in batches_val:
-            #x, y, I = generate_batch(r_val, io_val, a_val, t_val, w_val)
             actions, values, log_probs, action_logits = model.call(x)
             loss = tf.reduce_mean(tf.square(actions - y))
             val_loss += loss
@@ -229,7 +227,16 @@ if __name__ == '__main__':
 
         val_losses.append(val_loss / nbatches_val)
 
-        print(f'At epoch {epoch + 1}/{npretrain}, train loss is {train_loss / nbatches_tr}, mean validation loss is {np.mean(val_losses)}, patience is {patience_count + 1}/{patience}, dummy losses are {dummy_loss0 / nbatches_val} and {dummy_loss1 / nbatches_val}, time elapsed: {time() - t_start}')
+        print(f'At epoch {epoch + 1}/{npretrain}, train loss is {train_loss / nbatches_tr:.3f}, mean validation loss is {np.mean(val_losses):.3f}, patience is {patience_count + 1}/{patience}, dummy losses are {dummy_loss0 / nbatches_val:.3f} and {dummy_loss1 / nbatches_val:.3f}, time elapsed: {time() - t_start:.3f}')
+
+        # generate one new training and validation batch and substitute the oldest batch
+
+        del batches_tr[0]
+        x, y, I = generate_batch(r_tr, io_tr, a_tr, t_tr, w_tr)
+        batches_tr.append((x, y, I))
+        del batches_val[0]
+        x, y, I = generate_batch(r_val, io_val, a_val, t_val, w_val)
+        batches_val.append((x, y, I))
 
         if np.mean(val_losses) < val_loss_min:
             val_loss_min = np.mean(val_losses)

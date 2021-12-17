@@ -472,7 +472,7 @@ class PPOD(BaseRLModel):
         if hasattr(self.policy, 'log_std'):
             logger.logkv("std", tf.exp(self.policy.log_std).numpy().mean())
 
-    def pretrain(self, data_tr, data_val, data_tr_lens, data_val_lens, tstep, nepochs=10000, patience=100):
+    def pretrain(self, data_tr, data_val, data_tr_lens, data_val_lens, tstep, nepochs=10000, patience=100, batch_generation_freq=100):
 
         self.pretrain_policy = self.policy_class(
             self.observation_space, self.action_space, self.learning_rate,  **self.policy_kwargs, pi_trainable=False, vf_trainable=False
@@ -597,9 +597,18 @@ class PPOD(BaseRLModel):
 
         for epoch in range(nepochs):
 
+            if epoch % batch_generation_freq == 0:
+                batches_tr, batches_val = [], []
+                for i in range(nbatches_tr):
+                    x, y, I = generate_batch(r_tr, io_tr, a_tr, t_tr, w_tr)
+                    batches_tr.append((x, y, I))
+                for i in range(nbatches_val):
+                    x, y, I = generate_batch(r_val, io_val, a_val, t_val, w_val)
+                    batches_val.append((x, y, I))
+
             train_loss = 0.0
-            for i in range(nbatches_tr):
-                x, y, _ = generate_batch(r_tr, io_tr, a_tr, t_tr, w_tr)
+            for x, y, _ in batches_tr:
+                #x, y, _ = generate_batch(r_tr, io_tr, a_tr, t_tr, w_tr)
                 with tf.GradientTape() as tape:
                     tape.watch(self.pretrain_policy.trainable_variables)
                     actions, values, log_probs, action_logits = self.pretrain_policy.call(x, training=True)
@@ -619,8 +628,8 @@ class PPOD(BaseRLModel):
 
             val_loss = 0.0
 
-            for _ in range(nbatches_val):
-                x, y, _ = generate_batch(r_val, io_val, a_val, t_val, w_val)
+            for x, y, I in batches_val:
+                #x, y, _ = generate_batch(r_val, io_val, a_val, t_val, w_val)
                 actions, values, log_probs, action_logits = self.pretrain_policy.call(x)
                 if isinstance(self.action_space, spaces.Discrete):
                     loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y, logits=action_logits))
