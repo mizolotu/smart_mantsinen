@@ -62,11 +62,11 @@ class MantsinenBasic(gym.Env):
 
         rew_dim = len(self.signals['reward'])
         obs_dim = rew_dim
-        #self.rew_min = np.array(mins['reward'])
-        #self.rew_max = np.array(maxs['reward'])
+        self.rew_min = np.array(mins['reward'])
+        self.rew_max = np.array(maxs['reward'])
         #self.v_min = np.hstack([self.rew_min - self.rew_max] * lookback)
         #self.v_max = np.hstack([self.rew_max - self.rew_min] * lookback)
-        #self.d_max = np.linalg.norm(self.rew_max - self.rew_min)
+        self.d_max = np.linalg.norm(self.rew_max - self.rew_min)
         self.obs_input_min = np.array(mins['input'])
         self.obs_input_max = np.array(maxs['input'])
         self.obs_output_min = np.array(mins['output'])

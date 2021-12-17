@@ -130,9 +130,6 @@ class PPOD(BaseRLModel):
 
         # rl policy
 
-        #self.policy = self.policy_class(
-        #    self.observation_space, self.action_space, self.learning_rate, **self.policy_kwargs, shared_trainable=False, batch_size=self.n_envs_train
-        #)
         self.policy = self.policy_class(
             self.observation_space, self.action_space, self.learning_rate, **self.policy_kwargs, shared_trainable=False
         )
@@ -491,7 +488,6 @@ class PPOD(BaseRLModel):
         nval = len(data_val_lens)
         print(f'Training on {ntrain} trajectories, validating on {nval}')
         io_dim = obs_features - 3
-        print(io_dim)
         spl_idx = [3, 3 + io_dim, 3 + io_dim + act_dim, 3 + io_dim + act_dim + 1]
 
         # training batches
