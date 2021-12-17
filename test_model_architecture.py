@@ -4,7 +4,7 @@ import numpy as np
 import argparse as arp
 
 from collections import deque
-from config import ppo_net_arch, waypoints_dir, dataset_dir, signal_dir, lookback, tstep, batch_size, npretrain, patience, learning_rate, action_scale
+from config import ppo_net_arch, waypoints_dir, dataset_dir, signal_dir, lookback, tstep, batch_size, npretrain, patience, learning_rate, action_scale, use_inputs
 from stable_baselines.ppo.policies import PPOPolicy
 from common.data_utils import read_csv, load_waypoints_and_meta, load_signals
 from gym.spaces import Box
@@ -46,7 +46,9 @@ if __name__ == '__main__':
 
     # obs and act dim
 
-    io_dim = len(values_in) + len(values_out)
+    io_dim = len(values_out)
+    if use_inputs:
+        io_dim += len(values_in)
     act_dim = len(values_in)
     obs_features = data_tr.shape[1] - act_dim - 1 - 3
 
@@ -221,14 +223,14 @@ if __name__ == '__main__':
             loss = tf.reduce_mean(tf.square(actions - y))
             val_loss += loss
             val_loss_list.append(loss)
-            dummy_actions = dummy_predictor(x)
-            loss_ = np.mean(tf.square(dummy_actions - y), axis=1)
+            #dummy_actions = dummy_predictor(x)
+            #loss_ = np.mean(tf.square(dummy_actions - y), axis=1)
             idx0 = np.where(I == 0)[0]
             idx1 = np.where(I == 1)[0]
-            if len(idx0) > 0:
-                dummy_loss0 += np.mean(loss_[idx0])
-            if len(idx1) > 0:
-                dummy_loss1 += np.mean(loss_[idx1])
+            #if len(idx0) > 0:
+            #    dummy_loss0 += np.mean(loss_[idx0])
+            #if len(idx1) > 0:
+            #    dummy_loss1 += np.mean(loss_[idx1])
 
         val_losses.append(val_loss / nbatches_val)
 
