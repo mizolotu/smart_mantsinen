@@ -4,7 +4,7 @@ import numpy as np
 import argparse as arp
 
 from collections import deque
-from config import ppo_net_arch, waypoints_dir, dataset_dir, signal_dir, lookback, tstep, batch_size, npretrain, patience, learning_rate, action_scale, use_inputs
+from config import ppo_net_arch, waypoints_dir, dataset_dir, signal_dir, lookback, tstep, batch_size, npretrain, patience, learning_rate, action_scale, use_inputs, nwaypoints
 from stable_baselines.ppo.policies import PPOPolicy
 from common.data_utils import read_csv, load_waypoints_and_meta, load_signals
 from gym.spaces import Box
@@ -50,7 +50,7 @@ if __name__ == '__main__':
     if use_inputs:
         io_dim += len(values_in)
     act_dim = len(values_in)
-    obs_features = data_tr.shape[1] - act_dim - 1 - 3
+    obs_features = data_tr.shape[1] - act_dim - 1
 
     # spaces
 
@@ -137,7 +137,7 @@ if __name__ == '__main__':
             l = r_list[traj_idx].shape[0]
             idx_action = np.random.choice(l)
             t_action = t_list[traj_idx][idx_action]
-            w_action = w_list[traj_idx][idx_action, :]
+            w_action = w_list[traj_idx][idx_action, :].reshape(-1, 3)
             t_start = t_action - lookback * tstep
             t = np.arange(t_start, t_action, tstep)[:lookback]
             t = t[np.where(t >= t_list[traj_idx][0])]
@@ -154,7 +154,10 @@ if __name__ == '__main__':
                 for j in range(3):
                     r_[:, j] = np.interp(t, t_list[traj_idx][idx_start:idx_action], r_list[traj_idx][idx_start:idx_action, j])
                 r = np.vstack([r_list[traj_idx][0, :] * np.ones(lookback - r_.shape[0])[:, None], r_])
-                r = w_action - r
+                r_ = []
+                for wp in w_action:
+                    r_.append(wp - r)
+                r = np.hstack(r_)
 
                 # io
 
