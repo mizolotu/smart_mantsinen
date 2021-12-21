@@ -50,7 +50,7 @@ if __name__ == '__main__':
     if use_inputs:
         io_dim += len(values_in)
     act_dim = len(values_in)
-    obs_features = data_tr.shape[1] - act_dim - 1
+    obs_features = data_tr.shape[1] - act_dim - 1 - 3
 
     # spaces
 
