@@ -187,22 +187,30 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints, use_inputs=T
         for i in range(n - 1):
 
             wps_not_completed_idx = np.where(waypoints_completed == 0)[0]
-            if len(wps_not_completed_idx) > 0:
+            if len(wps_not_completed_idx) > 1:
                 dist_to_wps = np.linalg.norm(wpoints - rewards[i, :], axis=1)
-                idx_min_not_completed = wps_not_completed_idx[np.argmin(dist_to_wps[wps_not_completed_idx])]
-                wp_nearest_not_completed = wpoints[idx_min_not_completed, :]
+                idx_1_not_completed = wps_not_completed_idx[np.argmin(dist_to_wps[wps_not_completed_idx])]
+                idx_2_not_completed = wps_not_completed_idx[np.argsort(dist_to_wps[wps_not_completed_idx])[1]]
+                wp_nearest1_not_completed = wpoints[idx_1_not_completed, :]
+                wp_nearest2_not_completed = wpoints[idx_2_not_completed, :]
+            elif len(wps_not_completed_idx) > 0:
+                dist_to_wps = np.linalg.norm(wpoints - rewards[i, :], axis=1)
+                idx_1_not_completed = wps_not_completed_idx[np.argmin(dist_to_wps[wps_not_completed_idx])]
+                wp_nearest1_not_completed = wpoints[idx_1_not_completed, :]
+                wp_nearest2_not_completed = wpoints[-1, :]
             else:
-                wp_nearest_not_completed = wpoints[-1, :]
+                wp_nearest1_not_completed = wpoints[-1, :]
+                wp_nearest2_not_completed = wpoints[-1, :]
 
             # update completed wps
 
-            if np.linalg.norm(wp_nearest_not_completed - rewards[i, :]) <= wp_size and len(wps_not_completed_idx) > 0:
-                waypoints_completed[idx_min_not_completed] = 1
+            if np.linalg.norm(wp_nearest1_not_completed - rewards[i, :]) <= wp_size and len(wps_not_completed_idx) > 0:
+                waypoints_completed[idx_1_not_completed] = 1
                 switch_wp = True
 
             # creating obs
 
-            wps = np.vstack([np.expand_dims(wp_nearest_not_completed, 0), wpoints]).reshape(1, -1).flatten()
+            wps = np.vstack([wp_nearest1_not_completed, wp_nearest2_not_completed]).reshape(1, -1).flatten()
             x = rewards[i, :]
 
             #from_rp_to_nearest_wp_with_lookback = wp_nearest_not_completed - rewards[i, :]

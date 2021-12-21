@@ -24,10 +24,10 @@ use_outputs = True
 action_scale = 100
 wp_size = 1
 npoints = 4
-lookback = 4
+lookback = 16
 tstep = 0.01
 bonus = 10
-nwaypoints = 16
+nwaypoints = 1
 validation_size = 0.2
 ppo_net_arch = [
     #('conv1d', 256, 4, 1, 'same'), ('conv1d', 512, 4, 1, 'same'), ('dense', 1024),

@@ -4,7 +4,7 @@ import numpy as np
 import argparse as arp
 
 from collections import deque
-from config import ppo_net_arch, waypoints_dir, dataset_dir, signal_dir, lookback, tstep, batch_size, npretrain, patience, learning_rate, action_scale, use_inputs, nwaypoints
+from config import ppo_net_arch, waypoints_dir, dataset_dir, signal_dir, lookback, tstep, batch_size, npretrain, patience, learning_rate, action_scale, use_inputs
 from stable_baselines.ppo.policies import PPOPolicy
 from common.data_utils import read_csv, load_waypoints_and_meta, load_signals
 from gym.spaces import Box
@@ -23,7 +23,7 @@ if __name__ == '__main__':
     # parse args
 
     parser = arp.ArgumentParser()
-    parser.add_argument('-g', '--gpu', help='GPU', default='-1')
+    parser.add_argument('-g', '--gpu', help='GPU', default='0')
     args = parser.parse_args()
 
     # gpu
