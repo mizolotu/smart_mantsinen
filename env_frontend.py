@@ -141,8 +141,8 @@ class MantsinenBasic(gym.Env):
 
         # calculate obs
 
-        wp_nearest1_not_completed, wp_nearest2_not_completed = self._calculate_relations_to_wps(xyz)
-        obs = self._calculate_obs(wp_nearest1_not_completed, wp_nearest2_not_completed)
+        #wp_nearest1_not_completed, wp_nearest2_not_completed = self._calculate_relations_to_wps(xyz)
+        obs = self._calculate_obs()
 
         return obs
 
@@ -172,7 +172,7 @@ class MantsinenBasic(gym.Env):
 
         xyz = np.array(reward_components)
         self.r_buff.append(xyz)
-        wp_nearest1_not_completed, wp_nearest2_not_completed = self._calculate_relations_to_wps(xyz)
+        #wp_nearest1_not_completed, wp_nearest2_not_completed = self._calculate_relations_to_wps(xyz)
         reward, done, info, switch_wp = self._calculate_reward(xyz)
         self.reward += reward
 
@@ -190,7 +190,7 @@ class MantsinenBasic(gym.Env):
         o = np.array(input_output_obs)[self.obs_output_index]
         o_std = self._std_vector(o, self.obs_output_min, self.obs_output_max)
         self.o_buff.append(o_std)
-        obs = self._calculate_obs(wp_nearest1_not_completed, wp_nearest2_not_completed)
+        obs = self._calculate_obs()
         return obs, reward, done, info
 
     def render(self, mode='human', close=False):
@@ -230,7 +230,7 @@ class MantsinenBasic(gym.Env):
             wp_nearest2_not_completed = self.waypoints[-1, :]
         return wp_nearest1_not_completed, wp_nearest2_not_completed
 
-    def _calculate_obs(self, wp_nearest1_not_completed, wp_nearest2_not_completed):
+    def _calculate_obs(self):
 
         obs = np.vstack(self.r_buff)
         #obs = np.hstack([wp_nearest1_not_completed - obs, wp_nearest2_not_completed - obs])

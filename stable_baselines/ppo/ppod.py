@@ -491,7 +491,6 @@ class PPOD(BaseRLModel):
         print(f'Training on {ntrain} trajectories, validating on {nval}')
         io_dim = obs_features - 3 * nwaypoints
         spl_idx = [3, 3 + io_dim, 3 + io_dim + act_dim, 3 + io_dim + act_dim + 1]
-        print(io_dim)
 
         # training batches
 
@@ -585,6 +584,7 @@ class PPOD(BaseRLModel):
                     for j in range(io_dim):
                         io_[:, j] = np.interp(t, t_list[traj_idx][idx_start:idx_action], io_list[traj_idx][idx_start:idx_action, j])
                     io = np.vstack([io_list[traj_idx][0, :] * np.ones(lookback - io_.shape[0])[:, None], io_])
+                    io[:, -act_dim:] = np.random.rand(lookback, act_dim)
 
                     # x and y
 
