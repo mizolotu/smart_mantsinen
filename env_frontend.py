@@ -237,12 +237,13 @@ class MantsinenBasic(gym.Env):
         #obs = wp_nearest1_not_completed - obs
         obs = np.hstack([wp - obs for wp in self.waypoints])
 
-        if self.use_inputs:
-            i = np.vstack(self.i_buff)
-            obs = np.hstack([obs, i])
-        if self.use_outputs:
-            o = np.vstack(self.o_buff)
-            obs = np.hstack([obs, o])
+        #if self.use_inputs:
+        i = np.vstack(self.i_buff)
+        obs = np.hstack([obs, i])
+
+        #if self.use_outputs:
+        o = np.vstack(self.o_buff)
+        obs = np.hstack([obs, o])
 
         return obs
 
@@ -279,7 +280,5 @@ class MantsinenBasic(gym.Env):
             score = np.clip(1 - dist_to_nearest_wp_std - dist_to_last_std, 0, 1)
             done = False
             switch_wp = False
-        if switch_wp:
-            print(switch_wp)
         info = {'rc1': dist_to_nearest_wp_std, 'rc2': dist_to_last_std, 'rc3': 0}
         return score, done, info, switch_wp

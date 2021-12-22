@@ -85,7 +85,7 @@ if __name__ == '__main__':
     if not model.loaded:
         bc_train = read_csv(dataset_dir, 'train.csv')
         bc_val = read_csv(dataset_dir, 'test.csv')
-        model.pretrain(bc_train, bc_val, tr_traj_sizes, te_traj_sizes, tstep, nepochs=npretrain)
+        model.pretrain(bc_train, bc_val, tr_traj_sizes, te_traj_sizes, tstep, nepochs=npretrain, nwaypoints=nwaypoints)
         model.save(chkp_dir, 'first')
 
     # disable cuda

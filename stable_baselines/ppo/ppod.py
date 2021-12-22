@@ -471,7 +471,7 @@ class PPOD(BaseRLModel):
         if hasattr(self.policy, 'log_std'):
             logger.logkv("std", tf.exp(self.policy.log_std).numpy().mean())
 
-    def pretrain(self, data_tr, data_val, data_tr_lens, data_val_lens, tstep, nepochs=10000, patience=100):
+    def pretrain(self, data_tr, data_val, data_tr_lens, data_val_lens, tstep, nwaypoints, nepochs=10000, patience=100):
 
         self.pretrain_policy = self.policy_class(
             self.observation_space, self.action_space, self.learning_rate,  **self.policy_kwargs, pi_trainable=False, vf_trainable=False, action_scale=self.action_scale
@@ -480,7 +480,6 @@ class PPOD(BaseRLModel):
 
         lookback = self.observation_space.shape[0]
         obs_features = self.observation_space.shape[1]
-        print(obs_features)
 
         act_dim = self.action_space.shape[0]
 
@@ -490,8 +489,9 @@ class PPOD(BaseRLModel):
         ntrain = len(data_tr_lens)
         nval = len(data_val_lens)
         print(f'Training on {ntrain} trajectories, validating on {nval}')
-        io_dim = obs_features - 3
+        io_dim = obs_features - 3 * nwaypoints
         spl_idx = [3, 3 + io_dim, 3 + io_dim + act_dim, 3 + io_dim + act_dim + 1]
+        print(io_dim)
 
         # training batches
 
@@ -549,11 +549,13 @@ class PPOD(BaseRLModel):
             n = len(t_list)
             X, Y, I = [], [], []
             while len(X) < self.batch_size:
+                #print(len(X))
                 traj_idx = np.random.choice(n)
                 l = r_list[traj_idx].shape[0]
                 idx_action = np.random.choice(l)
                 t_action = t_list[traj_idx][idx_action]
-                w_action = w_list[traj_idx][idx_action, :]
+                #w_action = w_list[traj_idx][idx_action, :]
+                w_action = w_list[traj_idx][idx_action, :].reshape(-1, 3)
                 t_start = t_action - lookback * tstep
                 t = np.arange(t_start, t_action, tstep)[:lookback]
                 t = t[np.where(t >= t_list[traj_idx][0])]
@@ -571,7 +573,11 @@ class PPOD(BaseRLModel):
                     for j in range(3):
                         r_[:, j] = np.interp(t, t_list[traj_idx][idx_start:idx_action], r_list[traj_idx][idx_start:idx_action, j])
                     r = np.vstack([r_list[traj_idx][0, :] * np.ones(lookback - r_.shape[0])[:, None], r_])
-                    r = w_action - r
+                    #r = w_action - r
+                    r_ = []
+                    for wp in w_action:
+                        r_.append(wp - r)
+                    r = np.hstack(r_)
 
                     # io
 
