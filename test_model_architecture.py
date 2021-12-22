@@ -4,7 +4,7 @@ import numpy as np
 import argparse as arp
 
 from collections import deque
-from config import ppo_net_arch, waypoints_dir, dataset_dir, signal_dir, lookback, tstep, batch_size, npretrain, patience, learning_rate, action_scale, use_inputs
+from config import ppo_net_arch, waypoints_dir, dataset_dir, signal_dir, lookback, tstep, batch_size, npretrain, patience, learning_rate, action_scale, use_inputs, action_scale
 from stable_baselines.ppo.policies import PPOPolicy
 from common.data_utils import read_csv, load_waypoints_and_meta, load_signals
 from gym.spaces import Box
@@ -66,7 +66,8 @@ if __name__ == '__main__':
         vf_trainable=False,
         pi_trainable=False,
         net_arch=ppo_net_arch,
-        activation_fn=tf.nn.tanh
+        activation_fn=tf.nn.tanh,
+        action_scale=action_scale
     )
     model.summary()
 

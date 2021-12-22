@@ -141,8 +141,8 @@ class MantsinenBasic(gym.Env):
 
         # calculate obs
 
-        wp_nearst, wp_nearest_not_completed = self._calculate_relations_to_wps(xyz)
-        obs = self._calculate_obs(wp_nearest_not_completed)
+        wp_nearest1_not_completed, wp_nearest2_not_completed = self._calculate_relations_to_wps(xyz)
+        obs = self._calculate_obs(wp_nearest1_not_completed, wp_nearest2_not_completed)
 
         return obs
 
@@ -172,7 +172,7 @@ class MantsinenBasic(gym.Env):
 
         xyz = np.array(reward_components)
         self.r_buff.append(xyz)
-        wp_nearst, wp_nearest_not_completed = self._calculate_relations_to_wps(xyz)
+        wp_nearest1_not_completed, wp_nearest2_not_completed = self._calculate_relations_to_wps(xyz)
         reward, done, info, switch_wp = self._calculate_reward(xyz)
         self.reward += reward
 
@@ -190,7 +190,7 @@ class MantsinenBasic(gym.Env):
         o = np.array(input_output_obs)[self.obs_output_index]
         o_std = self._std_vector(o, self.obs_output_min, self.obs_output_max)
         self.o_buff.append(o_std)
-        obs = self._calculate_obs(wp_nearest_not_completed)
+        obs = self._calculate_obs(wp_nearest1_not_completed, wp_nearest2_not_completed)
         return obs, reward, done, info
 
     def render(self, mode='human', close=False):
@@ -212,20 +212,29 @@ class MantsinenBasic(gym.Env):
 
     def _calculate_relations_to_wps(self, xyz):
         wps_not_completed_idx = np.where(self.wps_completed == 0)[0]
-        if len(wps_not_completed_idx) > 0:
+        if len(wps_not_completed_idx) > 1:
+            dist_to_wps = np.linalg.norm(self.waypoints - xyz, axis=1)
+            idx_min_all = np.argmin(dist_to_wps)
+            idx_1_not_completed = wps_not_completed_idx[np.argmin(dist_to_wps[wps_not_completed_idx])]
+            idx_2_not_completed = wps_not_completed_idx[np.argsort(dist_to_wps[wps_not_completed_idx])[1]]
+            wp_nearest1_not_completed = self.waypoints[wps_not_completed_idx[idx_1_not_completed], :]
+            wp_nearest2_not_completed = self.waypoints[wps_not_completed_idx[idx_2_not_completed], :]
+        elif len(wps_not_completed_idx) > 0:
             dist_to_wps = np.linalg.norm(self.waypoints - xyz, axis=1)
             idx_min_all = np.argmin(dist_to_wps)
             idx_min_not_completed = np.argmin(dist_to_wps[wps_not_completed_idx])
-            wp_nearest = self.waypoints[idx_min_all, :]
-            wp_nearest_not_completed = self.waypoints[wps_not_completed_idx[idx_min_not_completed], :]
+            wp_nearest1_not_completed = self.waypoints[wps_not_completed_idx[idx_min_not_completed], :]
+            wp_nearest2_not_completed = self.waypoints[-1, :]
         else:
-            wp_nearest_not_completed = self.waypoints[-1, :]
-        return wp_nearest, wp_nearest_not_completed
+            wp_nearest1_not_completed = self.waypoints[-1, :]
+            wp_nearest2_not_completed = self.waypoints[-1, :]
+        return wp_nearest1_not_completed, wp_nearest2_not_completed
 
-    def _calculate_obs(self, wp_nearest_not_completed):
+    def _calculate_obs(self, wp_nearest1_not_completed, wp_nearest2_not_completed):
 
         obs = np.vstack(self.r_buff)
-        obs = wp_nearest_not_completed - obs
+        #obs = np.hstack([wp_nearest1_not_completed - obs, wp_nearest2_not_completed - obs])
+        obs = wp_nearest1_not_completed - obs
 
         if self.use_inputs:
             i = np.vstack(self.i_buff)

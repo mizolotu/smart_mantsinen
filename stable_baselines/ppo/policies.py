@@ -21,7 +21,7 @@ class PPOPolicy(BasePolicy):
     :param log_std_init: (float) Initial value for the log standard deviation
     """
     def __init__(self, observation_space, action_space, learning_rate, net_arch=None, activation_fn=tf.nn.tanh, adam_epsilon=1e-5,
-                 ortho_init=True, log_std_init=0.0, shared_trainable=True, pi_trainable=True, vf_trainable=True, batch_size=None, nsteps=None):
+                 ortho_init=True, log_std_init=0.0, action_scale=1.0, shared_trainable=True, pi_trainable=True, vf_trainable=True, batch_size=None, nsteps=None):
 
         super(PPOPolicy, self).__init__(observation_space, action_space)
 
@@ -57,6 +57,8 @@ class PPOPolicy(BasePolicy):
         self.log_std_init = log_std_init
         dist_kwargs = None
 
+        self.action_scale = action_scale
+
         # Action distribution
 
         self.action_dist = make_proba_distribution(action_space, dist_kwargs=dist_kwargs)
@@ -70,7 +72,7 @@ class PPOPolicy(BasePolicy):
         latent_dim_pi = self.features_extractor.latent_dim_pi
 
         if isinstance(self.action_dist, DiagGaussianDistribution):
-            self.action_net, self.log_std = self.action_dist.proba_distribution_net(latent_dim=latent_dim_pi, log_std_init=self.log_std_init)
+            self.action_net, self.log_std = self.action_dist.proba_distribution_net(latent_dim=latent_dim_pi, log_std_init=self.log_std_init, scale=self.action_scale)
         elif isinstance(self.action_dist, CategoricalDistribution):
             self.action_net = self.action_dist.proba_distribution_net(latent_dim=latent_dim_pi)
 

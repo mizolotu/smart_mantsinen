@@ -559,6 +559,7 @@ class PPOD(BaseRLModel):
                     idx_start = t_idx[-1]
                 else:
                     idx_start = 0
+
                 if idx_start < idx_action and len(t) > 0:
 
                     # w - xyz
@@ -586,6 +587,7 @@ class PPOD(BaseRLModel):
                         I.append(0)
                     else:
                         I.append(1)
+
             X = np.array(X)
             Y = np.vstack(Y)
             I = np.array(I)
@@ -593,9 +595,11 @@ class PPOD(BaseRLModel):
 
         batches_tr, batches_val = [], []
         for i in range(nbatches_tr):
+            #print(i, nbatches_tr)
             x, y, I = generate_batch(r_tr, io_tr, a_tr, t_tr, w_tr)
             batches_tr.append((x, y, I))
         for i in range(nbatches_val):
+            #print(i, nbatches_val)
             x, y, I = generate_batch(r_val, io_val, a_val, t_val, w_val)
             batches_val.append((x, y, I))
 

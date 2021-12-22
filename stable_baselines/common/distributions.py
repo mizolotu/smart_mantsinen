@@ -50,7 +50,7 @@ class DiagGaussianDistribution(Distribution):
         self.mean_actions = None
         self.log_std = None
 
-    def proba_distribution_net(self, latent_dim, log_std_init=0.0):
+    def proba_distribution_net(self, latent_dim, log_std_init=0.0, scale=1.0):
         """
         Create the layers and parameter that represent the distribution:
         one output will be the mean of the gaussian, the other parameter will be the
@@ -60,7 +60,10 @@ class DiagGaussianDistribution(Distribution):
         :param log_std_init: (float) Initial value for the log standard deviation
         :return: (tf.keras.models.Sequential, tf.Variable)
         """
-        mean_actions = Sequential(layers.Dense(self.action_dim, input_shape=(latent_dim,), activation=None))
+        mean_actions = Sequential()
+        mean_actions.add(layers.Dense(self.action_dim, input_shape=(latent_dim,), activation=None))
+        mean_actions.add(layers.Lambda(lambda x: x * scale))
+
         log_std = tf.Variable(tf.ones(self.action_dim) * log_std_init)
         return mean_actions, log_std
 
