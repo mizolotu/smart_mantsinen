@@ -62,7 +62,7 @@ if __name__ == '__main__':
     # load model and run it in demo mode
 
     try:
-        model = ppo(policy, env, 1, policy_kwargs=dict(net_arch=ppo_net_arch), batch_size=batch_size, n_steps=nsteps,
+        model = ppo(policy, env, 1, policy_kwargs=dict(net_arch=ppo_net_arch), batch_size=batch_size, n_steps=nsteps, action_scale=action_scale,
                     model_path=chkpt_dir, chkpt_name=args.checkpoint, tensorboard_log='tensorboard_log', verbose=1)
         cp_name = osp.basename(args.checkpoint)
         wp_name = osp.basename(args.waypoints)

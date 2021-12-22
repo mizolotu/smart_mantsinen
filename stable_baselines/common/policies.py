@@ -236,7 +236,7 @@ class MlpExtractor(Model):
 
 class FeatureExtractor(Model):
 
-    def __init__(self, net_arch, activation_fn, shared_trainable=True, vf_trainable=True, pi_trainable=True, dropout=0.5, gn_std=0.01, l1=1e-3, l2=1e-3):
+    def __init__(self, net_arch, activation_fn, shared_trainable=True, vf_trainable=True, pi_trainable=True, dropout=0.5, gn_std=0.05, l1=1e-3, l2=1e-3):
         super(FeatureExtractor, self).__init__()
 
         self.shared_trainable = shared_trainable
@@ -411,7 +411,7 @@ class FeatureExtractor(Model):
 class LstmExtractor(Model):
 
     def __init__(self, net_arch, activation_fn, shared_trainable=True, vf_trainable=True, pi_trainable=True,
-                 dropout=0.5, gn_std=0.01):
+                 dropout=0.5, gn_std=0.05):
         super(LstmExtractor, self).__init__()
 
         self.shared_trainable = shared_trainable

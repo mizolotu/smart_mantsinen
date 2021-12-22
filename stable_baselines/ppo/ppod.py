@@ -33,7 +33,7 @@ class PPOD(BaseRLModel):
                  gamma=0.99, gae_lambda=0.95, clip_range=0.1, clip_range_vf=None,
                  ent_coef=0.0, vf_coef=0.5, max_grad_norm=0.5,
                  target_kl=None, tensorboard_log=None, create_eval_env=False,
-                 policy_kwargs=None, verbose=0, seed=0,
+                 policy_kwargs=None, verbose=0, seed=0, action_scale=1.0,
                  _init_setup_model=True, model_path=None, log_path=None, chkpt_name=None):
 
         super(PPOD, self).__init__(policy, env, PPOPolicy, policy_kwargs=policy_kwargs, verbose=verbose, create_eval_env=create_eval_env, support_multi_env=True, seed=seed)
@@ -49,6 +49,8 @@ class PPOD(BaseRLModel):
         self.clip_range = clip_range
         self.clip_range_vf = clip_range_vf
         self.ent_coef = ent_coef
+
+        self.action_scale = action_scale
 
         self.vf_coef = vf_coef
         self.max_grad_norm = max_grad_norm
@@ -131,7 +133,7 @@ class PPOD(BaseRLModel):
         # rl policy
 
         self.policy = self.policy_class(
-            self.observation_space, self.action_space, self.learning_rate, **self.policy_kwargs, shared_trainable=False
+            self.observation_space, self.action_space, self.learning_rate, **self.policy_kwargs, shared_trainable=False, action_scale=self.action_scale
         )
         self.policy.summary()
 
@@ -472,7 +474,7 @@ class PPOD(BaseRLModel):
     def pretrain(self, data_tr, data_val, data_tr_lens, data_val_lens, tstep, nepochs=10000, patience=100):
 
         self.pretrain_policy = self.policy_class(
-            self.observation_space, self.action_space, self.learning_rate,  **self.policy_kwargs, pi_trainable=False, vf_trainable=False
+            self.observation_space, self.action_space, self.learning_rate,  **self.policy_kwargs, pi_trainable=False, vf_trainable=False, action_scale=self.action_scale
         )
         self.pretrain_policy.summary()
 
@@ -807,7 +809,8 @@ class PPOD(BaseRLModel):
             "n_envs": self.n_envs,
             "n_envs_train": self.n_envs_train,
             "seed": self.seed,
-            "policy_kwargs": self.policy_kwargs
+            "policy_kwargs": self.policy_kwargs,
+            "action_scale": self.action_scale
         }
         d_path = osp.join(path, 'params')
         serialized_data = data_to_json(data)

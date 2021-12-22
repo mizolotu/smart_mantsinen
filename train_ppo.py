@@ -79,7 +79,7 @@ if __name__ == '__main__':
     if not osp.isdir(chkp_dir):
         os.mkdir(chkp_dir)
 
-    model = ppo(MlpPolicy, env, n_env_train=nenvs, policy_kwargs=dict(net_arch = ppo_net_arch), batch_size=batch_size,
+    model = ppo(MlpPolicy, env, n_env_train=nenvs, policy_kwargs=dict(net_arch = ppo_net_arch), batch_size=batch_size, action_scale=action_scale,
                 n_steps=nsteps, model_path=chkp_dir, log_path=log_dir, tensorboard_log='tensorboard_log', verbose=1)
 
     if not model.loaded:
