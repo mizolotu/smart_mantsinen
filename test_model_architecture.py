@@ -4,7 +4,7 @@ import numpy as np
 import argparse as arp
 
 from collections import deque
-from config import ppo_net_arch, waypoints_dir, dataset_dir, signal_dir, lookback, tstep, batch_size, npretrain, patience, learning_rate, action_scale, use_inputs, action_scale
+from config import ppo_net_arch, waypoints_dir, dataset_dir, signal_dir, lookback, tstep, batch_size, npretrain, patience, learning_rate, action_scale, use_inputs
 from stable_baselines.ppo.policies import PPOPolicy
 from common.data_utils import read_csv, load_waypoints_and_meta, load_signals
 from gym.spaces import Box
@@ -47,8 +47,8 @@ if __name__ == '__main__':
     # obs and act dim
 
     io_dim = len(values_out)
-    if use_inputs:
-        io_dim += len(values_in)
+    #if use_inputs:
+    io_dim += len(values_in)
     act_dim = len(values_in)
     obs_features = data_tr.shape[1] - act_dim - 1 - 3
 

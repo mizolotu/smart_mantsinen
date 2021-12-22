@@ -480,6 +480,7 @@ class PPOD(BaseRLModel):
 
         lookback = self.observation_space.shape[0]
         obs_features = self.observation_space.shape[1]
+        print(obs_features)
 
         act_dim = self.action_space.shape[0]
 

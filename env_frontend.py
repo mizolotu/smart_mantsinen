@@ -61,7 +61,7 @@ class MantsinenBasic(gym.Env):
         # dimensions and standardization coefficients
 
         rew_dim = len(self.signals['reward'])
-        obs_dim = rew_dim
+        obs_dim = rew_dim * self.waypoints.shape[0]
         self.rew_min = np.array(mins['reward'])
         self.rew_max = np.array(maxs['reward'])
         #self.v_min = np.hstack([self.rew_min - self.rew_max] * lookback)
@@ -71,10 +71,10 @@ class MantsinenBasic(gym.Env):
         self.obs_input_max = np.array(maxs['input'])
         self.obs_output_min = np.array(mins['output'])
         self.obs_output_max = np.array(maxs['output'])
-        if use_inputs:
-            obs_dim += len(self.obs_input_index)
-        if use_outputs:
-            obs_dim += len(self.obs_output_index)
+        #if use_inputs:
+        obs_dim += len(self.obs_input_index)
+        #if use_outputs:
+        obs_dim += len(self.obs_output_index)
         act_dim = len(self.signals['input'])
         self.act_min, self.act_max = np.array(mins['input']), np.array(maxs['input'])
 
@@ -234,7 +234,8 @@ class MantsinenBasic(gym.Env):
 
         obs = np.vstack(self.r_buff)
         #obs = np.hstack([wp_nearest1_not_completed - obs, wp_nearest2_not_completed - obs])
-        obs = wp_nearest1_not_completed - obs
+        #obs = wp_nearest1_not_completed - obs
+        obs = np.hstack([wp - obs for wp in self.waypoints])
 
         if self.use_inputs:
             i = np.vstack(self.i_buff)
@@ -278,5 +279,7 @@ class MantsinenBasic(gym.Env):
             score = np.clip(1 - dist_to_nearest_wp_std - dist_to_last_std, 0, 1)
             done = False
             switch_wp = False
+        if switch_wp:
+            print(switch_wp)
         info = {'rc1': dist_to_nearest_wp_std, 'rc2': dist_to_last_std, 'rc3': 0}
         return score, done, info, switch_wp

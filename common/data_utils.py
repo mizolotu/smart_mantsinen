@@ -202,7 +202,7 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints, use_inputs=T
 
             # creating obs
 
-            wps = np.vstack([wp_nearest1_not_completed]).reshape(1, -1).flatten()
+            wps = wpoints.reshape(1, -1).flatten()
             x = rewards[i, :]
 
             #from_rp_to_nearest_wp_with_lookback = wp_nearest_not_completed - rewards[i, :]
@@ -234,11 +234,11 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints, use_inputs=T
 
             # add signal values
 
-            if use_inputs:
-                x = np.hstack([x, is_std[i, :]])
+            #if use_inputs:
+            x = np.hstack([x, is_std[i, :]])
 
-            if use_outputs:
-                x = np.hstack([x, os_std[i, :]])
+            #if use_outputs:
+            x = np.hstack([x, os_std[i, :]])
 
             # add actions
 
