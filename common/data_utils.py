@@ -148,6 +148,7 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints, use_inputs=T
     trajectory_file_ids = np.arange(len(trajectory_files))
     np.random.shuffle(trajectory_file_ids)
     for ei, ti in enumerate(trajectory_file_ids):
+        print(ei)
         fpath = trajectory_files[ti]
 
         # load trajectories
