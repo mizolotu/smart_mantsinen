@@ -236,7 +236,7 @@ class MlpExtractor(Model):
 
 class FeatureExtractor(Model):
 
-    def __init__(self, net_arch, activation_fn, shared_trainable=True, vf_trainable=True, pi_trainable=True, dropout=0.5, gn_std=0.05, l1=1e-4, l2=1e-5):
+    def __init__(self, net_arch, activation_fn, shared_trainable=True, vf_trainable=True, pi_trainable=True, dropout=0.5, gn_std=0.25, l1=1e-4, l2=1e-5):
         super(FeatureExtractor, self).__init__()
 
         self.shared_trainable = shared_trainable

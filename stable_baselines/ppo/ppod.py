@@ -589,7 +589,7 @@ class PPOD(BaseRLModel):
 
                     # randomize action
 
-                    i_prob = t_action / t_list[traj_idx][-1]
+                    i_prob = (t_action / t_list[traj_idx][-1]) ** 2
                     if i_prob < np.random.rand():
                         io[:, :act_dim] = np.random.rand(lookback, act_dim)
 
