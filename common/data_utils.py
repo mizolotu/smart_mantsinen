@@ -212,8 +212,9 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints, use_inputs=T
 
             # creating obs
 
+            wpoints_aug = (wpoints_aug - rew_min[None, :]) / (rew_max[None, :] - rew_min[None, :] + 1e-10)  # 0..1
             wps = wpoints_aug.reshape(1, -1).flatten()
-            x = rewards[i, :]
+            x = (rewards[i, :] - rew_min) / (rew_max - rew_min + eps)
 
             #from_rp_to_nearest_wp_with_lookback = wp_nearest_not_completed - rewards[i, :]
             #from_rp_to_nearest_wp_with_lookback_norm = np.linalg.norm(from_rp_to_nearest_wp_with_lookback)
