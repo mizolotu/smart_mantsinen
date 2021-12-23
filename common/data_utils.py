@@ -148,7 +148,6 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints, use_inputs=T
     trajectory_file_ids = np.arange(len(trajectory_files))
     np.random.shuffle(trajectory_file_ids)
     for ei, ti in enumerate(trajectory_file_ids):
-        print(ei)
         fpath = trajectory_files[ti]
 
         # load trajectories
@@ -192,8 +191,8 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints, use_inputs=T
             wpt_deltas = np.hstack([0, waypoint_times[1:] - waypoint_times[:-1]])
             waypoint_times_aug = waypoint_times + wpt_deltas * np.random.rand(n_waypoints)
             wpoints_aug = np.zeros((n_waypoints, 3))
-            for i in range(3):
-                wpoints_aug[:, i] = np.interp(waypoint_times_aug, rew_t, rewards[:, i])
+            for j in range(3):
+                wpoints_aug[:, j] = np.interp(waypoint_times_aug, rew_t, rewards[:, j])
 
             # wps not completed
 
