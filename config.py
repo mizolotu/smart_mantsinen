@@ -35,6 +35,6 @@ ppo_net_arch = [
     #('lstm', 64, True), ('lstm', 64, False), ('dense', 64),
     #('mask'), ('lstm', 64, False), ('dense', 512),
     ('conv1d', 256, 4, 1, 'valid'), ('dense', 512),
-    #('dense', 256), ('dense', 512), ('dense', 1024),
+    #('dense', 256), ('dense', 512),
     dict(vf=[64, 64]), dict(pi=[64, 64])
 ]
