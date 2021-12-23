@@ -659,14 +659,17 @@ class PPOD(BaseRLModel):
 
             print(f'At epoch {epoch + 1}/{nepochs}, train loss is {train_loss / nbatches_tr}, mean validation loss is {np.mean(val_losses)}, patience is {patience_count + 1}/{patience}')
 
-            # generate one new training and validation batch and substitute the oldest batch
+            # generate one new training batch and substitute the one with the lowest loss value
 
             del batches_tr[np.argmin(tr_loss_list)]
             x, y, I = generate_batch(r_tr, io_tr, a_tr, t_tr, w_tr)
             batches_tr.append((x, y, I))
-            del batches_val[np.argmin(val_loss_list)]
-            x, y, I = generate_batch(r_val, io_val, a_val, t_val, w_val)
-            batches_val.append((x, y, I))
+
+            # generate one new validation batch and substitute the one with the lowest loss value
+
+            #del batches_val[np.argmin(val_loss_list)]
+            #x, y, I = generate_batch(r_val, io_val, a_val, t_val, w_val)
+            #batches_val.append((x, y, I))
 
             if np.mean(val_losses) < val_loss_min:
                 val_loss_min = np.mean(val_losses)
