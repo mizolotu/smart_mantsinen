@@ -119,7 +119,8 @@ class MantsinenBasic(gym.Env):
         for i in range(self.lookback):
             input_output_obs, reward_components, last_state_time, crashed = self._get_state()
             xyz = np.array(reward_components)
-            self.r_buff.append(xyz)
+            xyz_std = self._std_vector(xyz, self.rew_min, self.rew_max)
+            self.r_buff.append(xyz_std)
             i = np.array(input_output_obs)[self.obs_input_index]
             i_std = self._std_vector(i, self.obs_input_min, self.obs_input_max)
             self.i_buff.append(i_std)
@@ -171,7 +172,8 @@ class MantsinenBasic(gym.Env):
         # calculate reward
 
         xyz = np.array(reward_components)
-        self.r_buff.append(xyz)
+        xyz_std = self._std_vector(xyz, self.rew_min, self.rew_max)
+        self.r_buff.append(xyz_std)
         #wp_nearest1_not_completed, wp_nearest2_not_completed = self._calculate_relations_to_wps(xyz)
         reward, done, info, switch_wp = self._calculate_reward(xyz)
         self.reward += reward
@@ -206,6 +208,10 @@ class MantsinenBasic(gym.Env):
         vector = (vector - xmin) / (xmax - xmin + eps)
         return vector
 
+    def _std_matrix(self, matrix, xmin, xmax, eps=1e-10):
+        matrix = (matrix - xmin[None, :]) / (xmax[None, :] - xmin[None, :] + eps)
+        return matrix
+
     def _orig_vector(self, vector, xmin, xmax):
         vector = vector * (xmax - xmin) + xmin
         return vector
@@ -235,7 +241,8 @@ class MantsinenBasic(gym.Env):
         obs = np.vstack(self.r_buff)
         #obs = np.hstack([wp_nearest1_not_completed - obs, wp_nearest2_not_completed - obs])
         #obs = wp_nearest1_not_completed - obs
-        obs = np.hstack([wp - obs for wp in self.waypoints])
+        wps = self._std_matrix(self.waypoints, self.rew_min, self.rew_max)
+        obs = np.hstack([wp - obs for wp in wps])
 
         #if self.use_inputs:
         i = np.vstack(self.i_buff)
