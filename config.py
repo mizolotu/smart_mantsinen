@@ -16,7 +16,7 @@ nsteps = 4096
 batch_size = 256
 npretrain = 10000
 patience = 100
-learning_rate = 2.5e-4
+learning_rate = 5e-4
 ntrain = 10000000000
 sleep_interval = 3
 use_inputs = False
@@ -24,7 +24,7 @@ use_outputs = True
 action_scale = 100
 wp_size = 1
 npoints = 4
-lookback = 4
+lookback = 1
 tstep = 0.01
 bonus = 10
 nwaypoints = 16
@@ -34,7 +34,7 @@ ppo_net_arch = [
     #('conv1d', 256, 10, 5, 'valid'), ('lstm', 256, False), ('dense', 512),
     #('lstm', 64, True), ('lstm', 64, False), ('dense', 64),
     #('mask'), ('lstm', 64, False), ('dense', 512),
-    ('conv1d', 512, 4, 1, 'valid'), ('dense', 1024),
-    #('dense', 1024), ('dense', 1024),
+    #('conv1d', 512, 4, 1, 'valid'), ('dense', 1024),
+    ('dense', 512), ('dense', 512),
     dict(vf=[64, 64]), dict(pi=[64, 64])
 ]
