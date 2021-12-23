@@ -186,6 +186,16 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints, use_inputs=T
 
         for i in range(n - 1):
 
+            # wps augmentation
+
+            wpt_deltas = np.hstack([0, waypoint_times[1:] - waypoint_times[:-1]])
+            waypoint_times_aug = waypoint_times + wpt_deltas * np.random.rand(n_waypoints)
+            wpoints_aug = np.zeros((n_waypoints, 3))
+            for i in range(3):
+                wpoints_aug[:, i] = np.interp(waypoint_times_aug, rew_t, rewards[:, i])
+
+            # wps not completed
+
             wps_not_completed_idx = np.where(waypoints_completed == 0)[0]
             if len(wps_not_completed_idx) > 0:
                 dist_to_wps = np.linalg.norm(wpoints - rewards[i, :], axis=1)
@@ -202,7 +212,7 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints, use_inputs=T
 
             # creating obs
 
-            wps = wpoints.reshape(1, -1).flatten()
+            wps = wpoints_aug.reshape(1, -1).flatten()
             x = rewards[i, :]
 
             #from_rp_to_nearest_wp_with_lookback = wp_nearest_not_completed - rewards[i, :]
