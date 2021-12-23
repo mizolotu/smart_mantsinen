@@ -584,8 +584,14 @@ class PPOD(BaseRLModel):
                     for j in range(io_dim):
                         io_[:, j] = np.interp(t, t_list[traj_idx][idx_start:idx_action], io_list[traj_idx][idx_start:idx_action, j])
                     io_pad = io_list[traj_idx][0, :] * np.ones(lookback - io_.shape[0])[:, None]
-                    io_pad[:, :act_dim] = np.random.rand(io_pad.shape[0], act_dim)
+                    #io_pad[:, :act_dim] = np.random.rand(io_pad.shape[0], act_dim)
                     io = np.vstack([io_pad, io_])
+
+                    # randomize action
+
+                    i_prob = t_action / t_list[traj_idx][-1]
+                    if i_prob < np.random.rand():
+                        io[:, :act_dim] = np.random.rand(lookback, act_dim)
 
                     # x and y
 
