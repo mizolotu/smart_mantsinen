@@ -471,7 +471,8 @@ class PPOD(BaseRLModel):
         if hasattr(self.policy, 'log_std'):
             logger.logkv("std", tf.exp(self.policy.log_std).numpy().mean())
 
-    def pretrain(self, data_tr, data_val, data_tr_lens, data_val_lens, tstep, nwaypoints, nepochs=10000, patience=100):
+    def pretrain(self, data_tr, data_val, data_tr_lens, data_val_lens, tstep, nwaypoints, nepochs=10000, patience=100,
+                 xyz_aug_radius=0.0, inputs_aug_prob=0.0, outputs_aug_prob=0.0):
 
         self.pretrain_policy = self.policy_class(
             self.observation_space, self.action_space, self.learning_rate,  **self.policy_kwargs, pi_trainable=False, vf_trainable=False, action_scale=self.action_scale
@@ -548,12 +549,10 @@ class PPOD(BaseRLModel):
             n = len(t_list)
             X, Y, I = [], [], []
             while len(X) < self.batch_size:
-                #print(len(X))
                 traj_idx = np.random.choice(n)
                 l = r_list[traj_idx].shape[0]
                 idx_action = np.random.choice(l)
                 t_action = t_list[traj_idx][idx_action]
-                #w_action = w_list[traj_idx][idx_action, :]
                 w_action = w_list[traj_idx][idx_action, :].reshape(-1, 3)
                 t_start = t_action - lookback * tstep
                 t = np.arange(t_start, t_action, tstep)[:lookback]
@@ -587,11 +586,13 @@ class PPOD(BaseRLModel):
                     #io_pad[:, :act_dim] = np.random.rand(io_pad.shape[0], act_dim)
                     io = np.vstack([io_pad, io_])
 
-                    # randomize action
+                    # randomize input and output
 
-                    i_prob = (t_action / t_list[traj_idx][-1]) ** 2
-                    if i_prob < np.random.rand():
-                        io[:, :act_dim] = np.random.rand(lookback, act_dim)
+                    for i in range(lookback):
+                        if np.random.rand() < inputs_aug_prob:
+                            io[i, :act_dim] = np.random.rand(act_dim)
+                        if np.random.rand() < outputs_aug_prob:
+                            io[i, act_dim:] = np.random.rand(io_dim - act_dim)
 
                     # x and y
 
