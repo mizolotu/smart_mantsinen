@@ -23,7 +23,7 @@ python -m pip install -r requirements.txt
 
 4. In terminal, navigate to the Mevea Software resources directory (default: C:\Program Files (x86)\Mevea\Resources\Python\Bin) and install numpy and requests:
 ```bash
-python -m pip install numpy requests
+python -m pip install numpy requests --no-cache-dir
 ```
 
 5. Open Mevea Solver, go to Settings, and enable automatic start. Close the solver.
