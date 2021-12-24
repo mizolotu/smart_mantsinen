@@ -565,13 +565,20 @@ class PPOD(BaseRLModel):
 
                 if idx_start < idx_action and len(t) > 0:
 
-                    # w - xyz
+                    # interpolate xyz
 
                     r_ = np.zeros((len(t), 3))
                     for j in range(3):
                         r_[:, j] = np.interp(t, t_list[traj_idx][idx_start:idx_action], r_list[traj_idx][idx_start:idx_action, j])
                     r = np.vstack([r_list[traj_idx][0, :] * np.ones(lookback - r_.shape[0])[:, None], r_])
-                    #r = w_action - r
+
+                    # augment xyz
+
+                    xyz_delta = np.random.rand(3) * xyz_aug_radius
+                    r += xyz_delta
+
+                    # wp - xyz
+
                     r_ = []
                     for wp in w_action:
                         r_.append(wp - r)
@@ -586,7 +593,7 @@ class PPOD(BaseRLModel):
                     #io_pad[:, :act_dim] = np.random.rand(io_pad.shape[0], act_dim)
                     io = np.vstack([io_pad, io_])
 
-                    # randomize input and output
+                    # augment input and output
 
                     for i in range(lookback):
                         if np.random.rand() < inputs_aug_prob:
