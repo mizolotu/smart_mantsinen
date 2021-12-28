@@ -1,4 +1,4 @@
-import argparse
+import argparse, os
 import os.path as osp
 import numpy as np
 
@@ -17,10 +17,12 @@ def make_env(env_class, *args):
 
 if __name__ == '__main__':
 
+    #os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+
     # process arguments
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-w', '--waypoints', help='Text file with waypoints.', default='data/waypoints/wps35.txt')
+    parser.add_argument('-w', '--waypoints', help='Text file with waypoints.', default='data/waypoints/wps34.txt')
     parser.add_argument('-m', '--model', help='Model directory.', default='models/mevea/mantsinen/ppo')
     parser.add_argument('-c', '--checkpoint', help='Checkpoint', default='first', choices=['first', 'last', 'best'])
     parser.add_argument('-v', '--video', help='Record video?', type=bool, default=False)

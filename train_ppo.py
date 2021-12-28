@@ -86,8 +86,8 @@ if __name__ == '__main__':
         bc_train = read_csv(dataset_dir, 'train.csv')
         bc_val = read_csv(dataset_dir, 'test.csv')
         model.pretrain(
-            bc_train, bc_val, tr_traj_sizes, te_traj_sizes, tstep, nepochs=npretrain, nwaypoints=nwaypoints,
-            xyz_aug_radius=xyz_aug_radius, inputs_aug_prob=inputs_aug_prob, outputs_aug_prob=outputs_aug_prob
+            bc_train, bc_val, tr_traj_sizes, te_traj_sizes, tstep, tdelay, nepochs=npretrain, nwaypoints=nwaypoints,
+            xyz_aug_radius=xyz_aug_radius, inputs_aug_prob=inputs_aug_prob, outputs_aug_radius=outputs_aug_radius
         )
         model.save(chkp_dir, 'first')
 
@@ -97,4 +97,4 @@ if __name__ == '__main__':
 
     # continue training
 
-    model.learn(total_timesteps=ntrain)
+    #model.learn(total_timesteps=ntrain)

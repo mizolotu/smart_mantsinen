@@ -240,8 +240,11 @@ class PPOD(BaseRLModel):
                 out = cv2.VideoWriter(video_file, fourcc, 20.0, (screen_size))
 
         tstart = time()
+        tstep = 0
 
         for step in range(self.n_steps):
+
+            tstepstart = time()
 
             obs = obs.reshape(1, *obs.shape)
             actions, values, log_probs, _ = self.policy.call(obs, deterministic=deterministic)
@@ -301,7 +304,10 @@ class PPOD(BaseRLModel):
                 self.env.set_attr('id', [proc.pid], indices=[env_idx])
                 obs = self.env.reset_one(env_idx)
 
-            tstart = time()
+            #tstart = time()
+            tstep += (time() - tstepstart)
+
+        print(f'Step time: {tstep / self.n_steps}')
 
         obs = obs.reshape(1, *obs.shape)
         values = self.policy.value_forward(obs)
@@ -471,8 +477,8 @@ class PPOD(BaseRLModel):
         if hasattr(self.policy, 'log_std'):
             logger.logkv("std", tf.exp(self.policy.log_std).numpy().mean())
 
-    def pretrain(self, data_tr, data_val, data_tr_lens, data_val_lens, tstep, nwaypoints, nepochs=10000, patience=100,
-                 xyz_aug_radius=0.0, inputs_aug_prob=0.0, outputs_aug_prob=0.0):
+    def pretrain(self, data_tr, data_val, data_tr_lens, data_val_lens, tstep, tdelay, nwaypoints, nepochs=10000, patience=100,
+                 xyz_aug_radius=0.0, inputs_aug_prob=0.0, outputs_aug_radius=0.0):
 
         self.pretrain_policy = self.policy_class(
             self.observation_space, self.action_space, self.learning_rate,  **self.policy_kwargs, pi_trainable=False, vf_trainable=False, action_scale=self.action_scale
@@ -545,7 +551,7 @@ class PPOD(BaseRLModel):
         val_loss_min = np.inf
         best_weights = None
 
-        def generate_batch(r_list, io_list, a_list, t_list, w_list):
+        def generate_batch(r_list, io_list, a_list, t_list, w_list, aug=False):
             n = len(t_list)
             X, Y, I = [], [], []
             while len(X) < self.batch_size:
@@ -554,8 +560,18 @@ class PPOD(BaseRLModel):
                 idx_action = np.random.choice(l)
                 t_action = t_list[traj_idx][idx_action]
                 w_action = w_list[traj_idx][idx_action, :].reshape(-1, 3)
-                t_start = t_action - lookback * tstep
-                t = np.arange(t_start, t_action, tstep)[:lookback]
+                tdelta = np.abs(np.random.rand(lookback)) * tdelay
+                t_start = t_action
+                t = []
+                for i in range(lookback):
+                    t_start = t_start - tstep
+                    if aug:
+                        t_start = t_start - tdelta[i]
+                    t.append(t_start)
+                t = np.array(t)
+                #t_start = t_action - lookback * tstep
+                #t = np.arange(t_start, t_action, tstep)[:lookback]
+                t = t[::-1][:lookback]
                 t = t[np.where(t >= t_list[traj_idx][0])]
                 t_idx = np.where(t_list[traj_idx] < t_start)[0]
                 if len(t_idx) > 0:
@@ -574,8 +590,9 @@ class PPOD(BaseRLModel):
 
                     # augment xyz
 
-                    xyz_delta = np.random.rand(3) * xyz_aug_radius
-                    r += xyz_delta
+                    if aug:
+                        for i in range(lookback):
+                            r[i, :] = r[i, :] + np.random.randn(3) * xyz_aug_radius
 
                     # wp - xyz
 
@@ -590,16 +607,16 @@ class PPOD(BaseRLModel):
                     for j in range(io_dim):
                         io_[:, j] = np.interp(t, t_list[traj_idx][idx_start:idx_action], io_list[traj_idx][idx_start:idx_action, j])
                     io_pad = io_list[traj_idx][0, :] * np.ones(lookback - io_.shape[0])[:, None]
-                    #io_pad[:, :act_dim] = np.random.rand(io_pad.shape[0], act_dim)
                     io = np.vstack([io_pad, io_])
 
                     # augment input and output
 
-                    for i in range(lookback):
-                        if np.random.rand() < inputs_aug_prob:
-                            io[i, :act_dim] = np.random.rand(act_dim)
-                        if np.random.rand() < outputs_aug_prob:
-                            io[i, act_dim:] = np.random.rand(io_dim - act_dim)
+                    if aug:
+                        for i in range(lookback):
+                            if np.random.rand() < inputs_aug_prob:
+                                io[i, :act_dim] = np.random.rand(act_dim)
+                            #if np.random.rand() < outputs_aug_prob:
+                            io[i, act_dim:] = io[i, act_dim:] + np.random.randn(io_dim - act_dim) * outputs_aug_radius
 
                     # x and y
 
@@ -619,11 +636,9 @@ class PPOD(BaseRLModel):
 
         batches_tr, batches_val = [], []
         for i in range(nbatches_tr):
-            #print(i, nbatches_tr)
-            x, y, I = generate_batch(r_tr, io_tr, a_tr, t_tr, w_tr)
+            x, y, I = generate_batch(r_tr, io_tr, a_tr, t_tr, w_tr, aug=True)
             batches_tr.append((x, y, I))
         for i in range(nbatches_val):
-            #print(i, nbatches_val)
             x, y, I = generate_batch(r_val, io_val, a_val, t_val, w_val)
             batches_val.append((x, y, I))
 
@@ -669,8 +684,9 @@ class PPOD(BaseRLModel):
 
             # generate one new training batch and substitute the one with the lowest loss value
 
-            del batches_tr[np.argmin(tr_loss_list)]
-            x, y, I = generate_batch(r_tr, io_tr, a_tr, t_tr, w_tr)
+            #del batches_tr[np.argmin(tr_loss_list)]
+            del batches_tr[0]
+            x, y, I = generate_batch(r_tr, io_tr, a_tr, t_tr, w_tr, aug=True)
             batches_tr.append((x, y, I))
 
             # generate one new validation batch and substitute the one with the lowest loss value

@@ -1,4 +1,4 @@
-model_dir = 'C:\\Users\\mevea\\MeveaModels'
+model_dir = 'C:\\Users\\mikha\\MeveaModels'
 model_path = f'{model_dir}\\Mantsinen\\Models\\Mantsinen300M\\300M_fixed.mvs'  # <- change this if needed
 server = 'http://127.0.0.1:5000'
 model_output = 'models/mevea/mantsinen/'
@@ -11,7 +11,7 @@ dataset_dir = 'data/dataset'
 waypoints_dir = 'data/waypoints'
 null_action = [0.0, 0.0, 0.0, 0.0, 0.0]
 default_action = [0.0, 100.0, 0.0, 100.0, 0.0]
-nenvs = 8  # <- change this if needed
+nenvs = 1  # <- change this if needed
 nsteps = 4096
 batch_size = 256
 npretrain = 10000
@@ -21,23 +21,24 @@ ntrain = 10000000000
 sleep_interval = 3
 use_inputs = True
 use_outputs = True
-inputs_aug_prob = 0.5
-outputs_aug_prob = 0.05
-xyz_aug_radius = 0.05
+inputs_aug_prob = 0.3  #0.32
+outputs_aug_radius = 0.07  #0.07
+xyz_aug_radius = 0.07  #0.07
 action_scale = 100
 wp_size = 1
 npoints = 4
 lookback = 4
 tstep = 0.01
+tdelay = 0.02
 bonus = 10
 nwaypoints = 16
 validation_size = 0.2
 ppo_net_arch = [
-    #('conv1d', 256, 4, 1, 'same'), ('conv1d', 512, 4, 1, 'same'), ('dense', 1024),
+    ('conv1d', 256, 3, 1, 'same'), ('conv1d', 512, 4, 1, 'valid'), ('dense', 1024),
     #('conv1d', 256, 10, 5, 'valid'), ('lstm', 256, False), ('dense', 512),
     #('lstm', 64, True), ('lstm', 64, False), ('dense', 64),
     #('mask'), ('lstm', 64, False), ('dense', 512),
-    ('conv1d', 512, 4, 1, 'valid'), ('dense', 1024),
-    #('dense', 256), ('dense', 512),
+    #('conv1d', 256, 4, 1, 'valid'), ('dense', 512),
+    #('dense', 512), ('dense', 512),
     dict(vf=[64, 64]), dict(pi=[64, 64])
 ]
