@@ -5,6 +5,7 @@ from time import sleep
 from common.data_utils import load_signals, parse_conditional_signals
 from common.server_utils import post_signals, get_state, post_action
 from collections import deque
+from itertools import cycle
 
 class MantsinenBasic(gym.Env):
 
@@ -22,10 +23,12 @@ class MantsinenBasic(gym.Env):
         self.server = server_url
         if type(waypoints).__name__ == 'list':
             self.waypoints_list = waypoints
-            self.waypoints = waypoints[0]
+            #self.waypoints = waypoints[0]
         else:
             self.waypoints_list = [waypoints]
-            self.waypoints = waypoints
+            #self.waypoints = waypoints
+        self.waypoints_cycle = cycle(self.waypoints_list)
+        self.waypoints = next(self.waypoints_cycle)
         self.nsteps = nsteps
         self.lookback = lookback
         self.use_inputs = use_inputs
@@ -136,8 +139,9 @@ class MantsinenBasic(gym.Env):
 
         # select waypoints
 
-        idx = np.random.choice(len(self.waypoints_list))
-        self.waypoints = self.waypoints_list[idx]
+        #idx = np.random.choice(len(self.waypoints_list))
+        #self.waypoints = self.waypoints_list[idx]
+        self.waypoints = next(self.waypoints_cycle)
         self.wps_completed = np.zeros(self.waypoints.shape[0])
 
         # calculate obs

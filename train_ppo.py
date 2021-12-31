@@ -80,21 +80,21 @@ if __name__ == '__main__':
         os.mkdir(chkp_dir)
 
     model = ppo(MlpPolicy, env, n_env_train=nenvs, policy_kwargs=dict(net_arch = ppo_net_arch), batch_size=batch_size, action_scale=action_scale,
-                n_steps=nsteps, model_path=chkp_dir, log_path=log_dir, tensorboard_log='tensorboard_log', verbose=1)
+                learning_rate=learning_rate, n_steps=nsteps, model_path=chkp_dir, log_path=log_dir, tensorboard_log='tensorboard_log', verbose=1)
 
     if not model.loaded:
         bc_train = read_csv(dataset_dir, 'train.csv')
         bc_val = read_csv(dataset_dir, 'test.csv')
         model.pretrain(
-            bc_train, bc_val, tr_traj_sizes, te_traj_sizes, tstep, tdelay, nepochs=npretrain, nwaypoints=nwaypoints,
+            bc_train, bc_val, tr_traj_sizes, te_traj_sizes, tstep, tdelay, nepochs=npretrain, nwaypoints=nwaypoints, patience=patience,
             xyz_aug_radius=xyz_aug_radius, inputs_aug_prob=inputs_aug_prob, outputs_aug_radius=outputs_aug_radius
         )
         model.save(chkp_dir, 'first')
 
     # disable cuda
 
-    os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+    #os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
     # continue training
 
-    #model.learn(total_timesteps=ntrain)
+    model.learn(total_timesteps=ntrain)

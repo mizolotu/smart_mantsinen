@@ -62,7 +62,7 @@ class DiagGaussianDistribution(Distribution):
         """
         mean_actions = Sequential()
         mean_actions.add(layers.Dense(self.action_dim, input_shape=(latent_dim,), activation=None))
-        mean_actions.add(layers.Lambda(lambda x: x * scale))
+        #mean_actions.add(layers.Lambda(lambda x: x * scale))
 
         log_std = tf.Variable(tf.ones(self.action_dim) * log_std_init)
         return mean_actions, log_std

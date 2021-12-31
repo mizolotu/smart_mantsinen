@@ -15,7 +15,7 @@ if __name__ == '__main__':
     parser.add_argument('-i', '--input', help='Input directory', default='models/mevea/mantsinen/ppo')
     parser.add_argument('-o', '--output', help='Output directory', default='figures/mevea/mantsinen/ppo')
     parser.add_argument('-s', '--steps', help='Steps')
-    parser.add_argument('-w', '--window', help='Moving average window', default=100)
+    parser.add_argument('-w', '--window', help='Moving average window', default=1)
     args = parser.parse_args()
 
     score_keys = ['ep_reward_mean', 'policy_loss', 'value_loss', 'std']

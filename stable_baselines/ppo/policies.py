@@ -28,6 +28,7 @@ class PPOPolicy(BasePolicy):
         self.batch_size = batch_size
         self.nsteps = nsteps
 
+        self.lookback = self.observation_space.shape[0]
         self.obs_dim = np.prod(self.observation_space.shape)
         self.shared_trainable = shared_trainable
         self.vf_trainable = vf_trainable
@@ -104,6 +105,7 @@ class PPOPolicy(BasePolicy):
     def _get_latent(self, obs, training):
         inputs = self.input_layer(obs)
         latent_pi, latent_vf = self.features_extractor(inputs, training)
+        #latent_pi, latent_vf = self.features_extractor(inputs)
         return latent_pi, latent_vf
 
     def _get_action_dist_from_latent(self, latent_pi, deterministic=False):

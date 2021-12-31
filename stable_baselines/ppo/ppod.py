@@ -29,7 +29,7 @@ from common.solver_utils import get_solver_path, start_solver, stop_solver
 class PPOD(BaseRLModel):
 
     def __init__(self, policy, env, n_env_train,
-                 learning_rate=2.5e-4, n_steps=2048, batch_size=64, n_epochs=32,
+                 learning_rate=1e-4, n_steps=2048, batch_size=64, n_epochs=8,
                  gamma=0.99, gae_lambda=0.95, clip_range=0.1, clip_range_vf=None,
                  ent_coef=0.0, vf_coef=0.5, max_grad_norm=0.5,
                  target_kl=None, tensorboard_log=None, create_eval_env=False,
@@ -241,13 +241,21 @@ class PPOD(BaseRLModel):
 
         tstart = time()
         tstep = 0
+        tavg = 0
 
         for step in range(self.n_steps):
 
             tstepstart = time()
 
             obs = obs.reshape(1, *obs.shape)
+
+            t0 = time()
             actions, values, log_probs, _ = self.policy.call(obs, deterministic=deterministic)
+            tavg += (time() - t0)
+            if env_idx == 0:
+                #print(env_idx, tavg / (step + 1))
+                pass
+
             actions = actions.numpy()
 
             mb_obs[env_count].append(obs[0])
@@ -680,7 +688,7 @@ class PPOD(BaseRLModel):
 
             val_losses.append(val_loss / nbatches_val)
 
-            print(f'At epoch {epoch + 1}/{nepochs}, train loss is {train_loss / nbatches_tr}, mean validation loss is {np.mean(val_losses)}, patience is {patience_count + 1}/{patience}')
+            print(f'At epoch {epoch + 1}, train loss is {train_loss / nbatches_tr}, mean validation loss is {np.mean(val_losses)}, patience is {patience_count + 1}/{patience}')
 
             # generate one new training batch and substitute the one with the lowest loss value
 

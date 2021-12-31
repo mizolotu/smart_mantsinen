@@ -22,7 +22,7 @@ if __name__ == '__main__':
     # process arguments
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-w', '--waypoints', help='Text file with waypoints.', default='data/waypoints/wps34.txt')
+    parser.add_argument('-w', '--waypoints', help='Text file with waypoints.', nargs='+', type=int, default=[33, 34, 35])
     parser.add_argument('-m', '--model', help='Model directory.', default='models/mevea/mantsinen/ppo')
     parser.add_argument('-c', '--checkpoint', help='Checkpoint', default='first', choices=['first', 'last', 'best'])
     parser.add_argument('-v', '--video', help='Record video?', type=bool, default=False)
@@ -38,7 +38,12 @@ if __name__ == '__main__':
 
     # extract waypoints
 
-    waypoints = get_test_waypoints(args.waypoints)
+    fpaths = []
+    waypoints = []
+    for i in args.waypoints:
+        fpath = osp.join(waypoints_dir, f'wps{i}.txt')
+        fpaths.append(fpath)
+        waypoints.append(get_test_waypoints(fpath))
 
     # create environment
 
@@ -67,15 +72,16 @@ if __name__ == '__main__':
         model = ppo(policy, env, 1, policy_kwargs=dict(net_arch=ppo_net_arch), batch_size=batch_size, n_steps=nsteps, action_scale=action_scale,
                     model_path=chkpt_dir, chkpt_name=args.checkpoint, tensorboard_log='tensorboard_log', verbose=1)
         cp_name = osp.basename(args.checkpoint)
-        wp_name = osp.basename(args.waypoints)
-        img_fname = f"{wp_name.split('.txt')[0]}_{cp_name}.png"
-        img_fpath = osp.join(img_output, 'ppo', img_fname)
-        if args.video:
-            video_fname = f"{wp_name.split('.txt')[0]}_{cp_name}.mp4"
-            video_fpath = osp.join(video_output, 'ppo', video_fname)
-            print(f'Recording to {video_fpath}')
-        else:
-            video_fpath = None
-        model.demo(img_file=img_fpath, video_file=video_fpath)
+        for fpath in fpaths:
+            wp_name = osp.basename(fpath)
+            img_fname = f"{wp_name.split('.txt')[0]}_{cp_name}.png"
+            img_fpath = osp.join(img_output, 'ppo', img_fname)
+            if args.video:
+                video_fname = f"{wp_name.split('.txt')[0]}_{cp_name}.mp4"
+                video_fpath = osp.join(video_output, 'ppo', video_fname)
+                print(f'Recording to {video_fpath}')
+            else:
+                video_fpath = None
+            model.demo(img_file=img_fpath, video_file=video_fpath)
     except Exception as e:
         print(e)
