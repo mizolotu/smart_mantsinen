@@ -9,24 +9,25 @@ if __name__ == '__main__':
     # prepare training data
 
     trajectory_files = [osp.join(trajectory_dir, fpath) for fpath in os.listdir(trajectory_dir) if fpath.endswith('csv')]
-    bc_train, bc_val, wps, traj_ids, traj_stages, traj_sizes = prepare_trajectories(
+    bc_train, bc_val, bc_inf, wps, traj_ids, traj_stages, traj_sizes = prepare_trajectories(
         signal_dir,
         trajectory_files,
         n_waypoints=nwaypoints,
-        use_inputs=use_inputs,
-        use_outputs=use_outputs,
         action_scale=action_scale,
         val_size=validation_size,
-        wp_size=wp_size
+        inf_size=inference_size,
+        wp_size=wp_size,
+        use_inputs=use_inputs
     )
-    print(bc_train.shape, bc_val.shape)
+    print(bc_train.shape, bc_val.shape, bc_inf.shape)
 
     # save dataset
 
     if not osp.isdir(dataset_dir):
         os.mkdir(dataset_dir)
-    write_csv(bc_train, dataset_dir, 'train.csv')
-    write_csv(bc_val, dataset_dir, 'test.csv')
+    write_csv(bc_train, dataset_dir, 'tr.csv')
+    write_csv(bc_val, dataset_dir, 'val.csv')
+    write_csv(bc_inf, dataset_dir, 'inf.csv')
     write_json({
         'traj_sizes': traj_sizes,
         'traj_stages': traj_stages,

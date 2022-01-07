@@ -107,7 +107,7 @@ def adjust_indexes(signals, identical_input_signals):
     act_index = np.array(act_index)
     return obs_input_index, act_index
 
-def prepare_trajectories(signal_dir, trajectory_files, n_waypoints, use_inputs=True, use_outputs=True, action_scale=1, val_size=0.4, seed=0, wp_size=1):
+def prepare_trajectories(signal_dir, trajectory_files, n_waypoints, action_scale=1, val_size=0.1, inf_size=0.1, seed=0, wp_size=1, use_inputs=True):
 
     # set seed
 
@@ -137,6 +137,7 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints, use_inputs=T
 
     trajectories_tr = []
     trajectories_val = []
+    trajectories_inf = []
     waypoints = []
     traj_stages = []
     traj_ids = []
@@ -144,6 +145,8 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints, use_inputs=T
     rews = []
     val_size = len(trajectory_files) * val_size
     val_size = 1 if val_size < 1 else np.floor(val_size)
+    inf_size = len(trajectory_files) * inf_size
+    inf_size = 1 if inf_size < 1 else np.floor(inf_size)
 
     trajectory_file_ids = np.arange(len(trajectory_files))
     np.random.shuffle(trajectory_file_ids)
@@ -178,9 +181,6 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints, use_inputs=T
 
         # loop through trajectory points
 
-        wp_first = wpoints[0, :]
-        wp_last = wpoints[-1, :]
-
         traj = []
         tmin = rew_t[0]
 
@@ -193,6 +193,15 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints, use_inputs=T
             wpoints_aug = np.zeros((n_waypoints, 3))
             for j in range(3):
                 wpoints_aug[:, j] = np.interp(waypoint_times_aug, rew_t, rewards[:, j])
+
+            # nearest wp and the next
+
+            dist_to_wps = np.linalg.norm(wpoints - rewards[i, :], axis=1)
+            idx_1 = np.argmin(dist_to_wps)
+            if idx_1 < n_waypoints - 1:
+                idx_2 = idx_1 + 1
+            else:
+                idx_2 = n_waypoints - 1
 
             # wps not completed
 
@@ -213,8 +222,10 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints, use_inputs=T
             # creating obs
 
             wpoints_aug = (wpoints_aug - rew_min[None, :]) / (rew_max[None, :] - rew_min[None, :] + 1e-10)  # 0..1
-            wps = wpoints_aug.reshape(1, -1).flatten()
-            x = (rewards[i, :] - rew_min) / (rew_max - rew_min + eps)
+            #wps = wpoints_aug.reshape(1, -1).flatten()
+            wps = np.hstack([wpoints_aug[idx_1, :], wpoints_aug[idx_2, :]])
+            x = (rewards[i, :] - rew_min) / (rew_max - rew_min + eps)  # 0..1
+            #x = rewards[i, :]
 
             #from_rp_to_nearest_wp_with_lookback = wp_nearest_not_completed - rewards[i, :]
             #from_rp_to_nearest_wp_with_lookback_norm = np.linalg.norm(from_rp_to_nearest_wp_with_lookback)
@@ -245,8 +256,8 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints, use_inputs=T
 
             # add signal values
 
-            #if use_inputs:
-            x = np.hstack([x, is_std[i, :]])
+            if use_inputs:
+                x = np.hstack([x, is_std[i, :]])
 
             #if use_outputs:
             x = np.hstack([x, os_std[i, :]])
@@ -273,30 +284,30 @@ def prepare_trajectories(signal_dir, trajectory_files, n_waypoints, use_inputs=T
 
         # add to the lists
 
-        if len(trajectory_files) > 1:
-            if ei < len(trajectory_files) - val_size:
-                traj_stages.append('train')
-                trajectories_tr.append(traj.copy())
-            else:
-                traj_stages.append('test')
-                trajectories_val.append(traj.copy())
+        if ei < len(trajectory_files) - val_size - inf_size:
+            traj_stages.append('tr')
+            trajectories_tr.append(traj.copy())
+        elif ei < len(trajectory_files) - inf_size:
+            traj_stages.append('val')
+            trajectories_val.append(traj.copy())
         else:
-            raise NotImplemented
+            traj_stages.append('inf')
+            trajectories_inf.append(traj.copy())
 
-    return np.vstack(trajectories_tr), np.vstack(trajectories_val), waypoints, traj_ids, traj_stages, traj_sizes
+    return np.vstack(trajectories_tr), np.vstack(trajectories_val), np.vstack(trajectories_inf), waypoints, traj_ids, traj_stages, traj_sizes
 
-def load_waypoints_and_meta(waypoints_dir, dataset_dir):
+def load_waypoints_and_meta_for_training(waypoints_dir, dataset_dir):
     wp_files = [osp.join(waypoints_dir, fpath) for fpath in os.listdir(waypoints_dir) if fpath.endswith('txt')]
     waypoints = []
     for i, wp in enumerate(wp_files):
         waypoints.append(read_csv(waypoints_dir, f'wps{i + 1}.txt'))
     meta = read_json(dataset_dir, 'metainfo.json')
-    tr_traj_sizes = [s for s, wp_stage in zip(meta['traj_sizes'], meta['traj_stages']) if wp_stage == 'train']
-    te_traj_sizes = [s for s, wp_stage in zip(meta['traj_sizes'], meta['traj_stages']) if wp_stage == 'test']
+    tr_traj_sizes = [s for s, wp_stage in zip(meta['traj_sizes'], meta['traj_stages']) if wp_stage == 'tr']
+    val_traj_sizes = [s for s, wp_stage in zip(meta['traj_sizes'], meta['traj_stages']) if wp_stage == 'val']
     tr_waypoints = waypoints[:len(tr_traj_sizes)]
-    te_waypoints = waypoints[len(tr_traj_sizes):]
-    assert len(tr_waypoints) + len(te_waypoints) == len(waypoints)
-    return tr_waypoints, te_waypoints, tr_traj_sizes, te_traj_sizes
+    val_waypoints = waypoints[len(tr_traj_sizes):]
+    assert len(tr_waypoints) + len(val_waypoints) == len(waypoints)
+    return tr_waypoints, val_waypoints, tr_traj_sizes, val_traj_sizes
 
 def get_test_waypoints(fname):
     v = pandas.read_csv(fname, header=None).values

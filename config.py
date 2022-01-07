@@ -1,4 +1,4 @@
-model_dir = 'C:\\Users\\mevea\\MeveaModels' # <- change this if needed
+model_dir = 'C:\\Users\\mikha\\MeveaModels' # <- change this if needed
 model_path = f'{model_dir}\\Mantsinen\\Models\\Mantsinen300M\\300M_fixed.mvs'  # <- change this if needed
 server = 'http://127.0.0.1:5000'
 model_output = 'models/mevea/mantsinen/'
@@ -11,19 +11,23 @@ dataset_dir = 'data/dataset'
 waypoints_dir = 'data/waypoints'
 null_action = [0.0, 0.0, 0.0, 0.0, 0.0]
 default_action = [0.0, 100.0, 0.0, 100.0, 0.0]
-nenvs = 4
-nsteps = 4096
+nenvs = 2
+nsteps = 2048
 batch_size = 512
+nbatches = 1000
 npretrain = 10000
-patience = 25
-learning_rate = 2.5e-4
+patience = 32
+learning_rate = 1.0e-4
 ntrain = 10000000000
 sleep_interval = 3
-use_inputs = True
+use_inputs = False
 use_outputs = True
-inputs_aug_prob = 0.33  #0.32
-outputs_aug_radius = 0.07  #0.07
-xyz_aug_radius = 0.07  #0.07
+in_aug_prb = 0.0
+in_aug_rad = 0.0
+out_aug_prb = 0.0
+out_aug_rad = 0.0
+xyz_aug_prb = 0.0
+xyz_aug_rad = 0.0
 action_scale = 100
 wp_size = 1
 npoints = 4
@@ -32,8 +36,9 @@ tstep = 0.01
 tdelay = 0.02
 bonus = 10
 nwaypoints = 16
-validation_size = 0.1
+validation_size = 0.12
+inference_size = 0.12
 ppo_net_arch = [
-    ('conv1d', 256, 3, 1, 'same'), ('conv1d', 512, 4, 1, 'valid'), ('dense', 512),
-    dict(vf=[256, 128]), dict(pi=[256, 128])
+    ('conv1d', 512, 4, 1, 'valid'), ('dense', 1024),
+    dict(vf=[256, 256]), dict(pi=[256, 256])
 ]

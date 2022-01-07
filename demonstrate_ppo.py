@@ -22,10 +22,10 @@ if __name__ == '__main__':
     # process arguments
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-w', '--waypoints', help='Text file with waypoints.', nargs='+', type=int, default=[33, 34, 35])
+    parser.add_argument('-w', '--waypoints', help='Text file with waypoints.', nargs='+', type=int, default=[32, 33, 34, 35])
     parser.add_argument('-m', '--model', help='Model directory.', default='models/mevea/mantsinen/ppo')
     parser.add_argument('-c', '--checkpoint', help='Checkpoint', default='first', choices=['first', 'last', 'best'])
-    parser.add_argument('-v', '--video', help='Record video?', type=bool, default=False)
+    parser.add_argument('-v', '--video', help='Record video?', type=bool, default=True)
     args = parser.parse_args()
 
     chkpt_dir = args.model

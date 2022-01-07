@@ -64,7 +64,7 @@ class MantsinenBasic(gym.Env):
         # dimensions and standardization coefficients
 
         rew_dim = len(self.signals['reward'])
-        obs_dim = rew_dim * self.waypoints.shape[0]
+        obs_dim = rew_dim * 3 # self.waypoints.shape[0]
         self.rew_min = np.array(mins['reward'])
         self.rew_max = np.array(maxs['reward'])
         #self.v_min = np.hstack([self.rew_min - self.rew_max] * lookback)
@@ -74,8 +74,8 @@ class MantsinenBasic(gym.Env):
         self.obs_input_max = np.array(maxs['input'])
         self.obs_output_min = np.array(mins['output'])
         self.obs_output_max = np.array(maxs['output'])
-        #if use_inputs:
-        obs_dim += len(self.obs_input_index)
+        if use_inputs:
+            obs_dim += len(self.obs_input_index)
         #if use_outputs:
         obs_dim += len(self.obs_output_index)
         act_dim = len(self.signals['input'])
@@ -130,7 +130,7 @@ class MantsinenBasic(gym.Env):
             o = np.array(input_output_obs)[self.obs_output_index]
             o_std = self._std_vector(o, self.obs_output_min, self.obs_output_max)
             self.o_buff.append(o_std)
-            sleep(self.tstep)
+            #sleep(self.tstep)
 
         # update simulation times
 
@@ -146,8 +146,8 @@ class MantsinenBasic(gym.Env):
 
         # calculate obs
 
-        #wp_nearest1_not_completed, wp_nearest2_not_completed = self._calculate_relations_to_wps(xyz)
-        obs = self._calculate_obs()
+        wp_nearest1, wp_nearest2 = self._calculate_relations_to_wps(xyz)
+        obs = self._calculate_obs(wp_nearest1, wp_nearest2)
 
         return obs
 
@@ -166,7 +166,7 @@ class MantsinenBasic(gym.Env):
         #print(self.env_idx, self.step_count, self.total_step_count % self.nsteps, 'before get_state')
         input_output_obs, reward_components, self.last_simulation_time, crashed = self._get_state()
         #print(self.env_idx, self.step_count, self.total_step_count % self.nsteps, 'after get_state')
-        new_state_simulation_time_max = self.step_simulation_time + self.tstep
+        new_state_simulation_time_max = self.step_simulation_time # + self.tstep
         if self.last_simulation_time > new_state_simulation_time_max:
             self.step_simulation_time = self.last_simulation_time
         else:
@@ -177,7 +177,7 @@ class MantsinenBasic(gym.Env):
         xyz = np.array(reward_components)
         xyz_std = self._std_vector(xyz, self.rew_min, self.rew_max)
         self.r_buff.append(xyz_std)
-        #wp_nearest1_not_completed, wp_nearest2_not_completed = self._calculate_relations_to_wps(xyz)
+        wp_nearest1, wp_nearest2 = self._calculate_relations_to_wps(xyz)
         reward, done, info, switch_wp = self._calculate_reward(xyz)
         self.reward += reward
 
@@ -195,7 +195,7 @@ class MantsinenBasic(gym.Env):
         o = np.array(input_output_obs)[self.obs_output_index]
         o_std = self._std_vector(o, self.obs_output_min, self.obs_output_max)
         self.o_buff.append(o_std)
-        obs = self._calculate_obs()
+        obs = self._calculate_obs(wp_nearest1, wp_nearest2)
         return obs, reward, done, info
 
     def render(self, mode='human', close=False):
@@ -220,6 +220,17 @@ class MantsinenBasic(gym.Env):
         return vector
 
     def _calculate_relations_to_wps(self, xyz):
+        dist_to_wps = np.linalg.norm(self.waypoints - xyz, axis=1)
+        idx_1 = np.argmin(dist_to_wps)
+        if idx_1 < self.waypoints.shape[0] - 1:
+            idx_2 = idx_1 + 1
+        else:
+            idx_2 = self.waypoints.shape[0] - 1
+        wp_nearest1 = self.waypoints[idx_1, :]
+        wp_nearest2 = self.waypoints[idx_2, :]
+        return wp_nearest1, wp_nearest2
+
+    def _calculate_relations_to_wps_old(self, xyz):
         wps_not_completed_idx = np.where(self.wps_completed == 0)[0]
         if len(wps_not_completed_idx) > 1:
             dist_to_wps = np.linalg.norm(self.waypoints - xyz, axis=1)
@@ -239,17 +250,21 @@ class MantsinenBasic(gym.Env):
             wp_nearest2_not_completed = self.waypoints[-1, :]
         return wp_nearest1_not_completed, wp_nearest2_not_completed
 
-    def _calculate_obs(self):
+    def _calculate_obs(self, wp_nearest1, wp_nearest2):
 
         obs = np.vstack(self.r_buff)
         #obs = np.hstack([wp_nearest1_not_completed - obs, wp_nearest2_not_completed - obs])
         #obs = wp_nearest1_not_completed - obs
-        wps = self._std_matrix(self.waypoints, self.rew_min, self.rew_max)
-        obs = np.hstack([wp - obs for wp in wps])
+        wps_nearest = np.vstack([wp_nearest1, wp_nearest2])
+        #wps = self._std_matrix(self.waypoints, self.rew_min, self.rew_max)
+        wps = self._std_matrix(wps_nearest, self.rew_min, self.rew_max)
+        #obs = np.hstack([wp - obs for wp in wps])
+        obs = np.hstack([wp for wp in wps]).reshape(1, -1)
+        obs = np.hstack([np.array(self.r_buff), obs * np.ones(self.lookback)[:, None]])
 
-        #if self.use_inputs:
-        i = np.vstack(self.i_buff)
-        obs = np.hstack([obs, i])
+        if self.use_inputs:
+            i = np.vstack(self.i_buff)
+            obs = np.hstack([obs, i])
 
         #if self.use_outputs:
         o = np.vstack(self.o_buff)

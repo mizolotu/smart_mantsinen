@@ -29,7 +29,7 @@ from common.solver_utils import get_solver_path, start_solver, stop_solver
 class PPOD(BaseRLModel):
 
     def __init__(self, policy, env, n_env_train,
-                 learning_rate=1e-4, n_steps=2048, batch_size=64, n_epochs=8,
+                 learning_rate=1e-4, n_steps=2048, batch_size=64, n_epochs=4,
                  gamma=0.99, gae_lambda=0.95, clip_range=0.1, clip_range_vf=None,
                  ent_coef=0.0, vf_coef=0.5, max_grad_norm=0.5,
                  target_kl=None, tensorboard_log=None, create_eval_env=False,
@@ -289,8 +289,6 @@ class PPOD(BaseRLModel):
                 img = pyautogui.screenshot(region=(x, y, width, height))
                 shots.append(cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR))
 
-            #print(step, time() - tstart)
-
             # reset if done
 
             if done:
@@ -312,7 +310,6 @@ class PPOD(BaseRLModel):
                 self.env.set_attr('id', [proc.pid], indices=[env_idx])
                 obs = self.env.reset_one(env_idx)
 
-            #tstart = time()
             tstep += (time() - tstepstart)
 
         print(f'Step time: {tstep / self.n_steps}')
@@ -485,8 +482,8 @@ class PPOD(BaseRLModel):
         if hasattr(self.policy, 'log_std'):
             logger.logkv("std", tf.exp(self.policy.log_std).numpy().mean())
 
-    def pretrain(self, data_tr, data_val, data_tr_lens, data_val_lens, tstep, tdelay, nwaypoints, nepochs=10000, patience=100,
-                 xyz_aug_radius=0.0, inputs_aug_prob=0.0, outputs_aug_radius=0.0):
+    def pretrain(self, data_tr, data_val, data_tr_lens, data_val_lens, tstep, tdelay, nbatches=None, nepochs=10000, patience=100,
+                 xyz_aug_prb=0.0, xyz_aug_rad=0.0, in_aug_prb=0.0, in_aug_rad=0.0, out_aug_prb=0.0, out_aug_rad=0.0, use_inputs=True):
 
         self.pretrain_policy = self.policy_class(
             self.observation_space, self.action_space, self.learning_rate,  **self.policy_kwargs, pi_trainable=False, vf_trainable=False, action_scale=self.action_scale
@@ -498,13 +495,13 @@ class PPOD(BaseRLModel):
 
         act_dim = self.action_space.shape[0]
 
-        assert data_tr.shape[1] == obs_features + act_dim + 1 + 3, 'Incorrect training data shape'
-        assert data_val.shape[1] == obs_features + act_dim + 1 + 3, 'Incorrect validation data shape'
+        assert data_tr.shape[1] == obs_features + act_dim + 1, 'Incorrect training data shape'
+        assert data_val.shape[1] == obs_features + act_dim + 1, 'Incorrect validation data shape'
 
         ntrain = len(data_tr_lens)
         nval = len(data_val_lens)
         print(f'Training on {ntrain} trajectories, validating on {nval}')
-        io_dim = obs_features - 3 * nwaypoints
+        io_dim = obs_features - 3 * 3 # nwaypoints
         spl_idx = [3, 3 + io_dim, 3 + io_dim + act_dim, 3 + io_dim + act_dim + 1]
 
         # training batches
@@ -549,8 +546,12 @@ class PPOD(BaseRLModel):
             batch_idx += 1
             idx_start = idx_start + l
 
-        nbatches_tr = nbatches_tr // self.batch_size
-        nbatches_val = nbatches_val // self.batch_size
+        if nbatches is None:
+            nbatches_tr = nbatches_tr // self.batch_size
+            nbatches_val = nbatches_val // self.batch_size
+        else:
+            nbatches_tr = nbatches
+            nbatches_val = nbatches
 
         print(f'Number of training batches: {nbatches_tr}, number of validation batches: {nbatches_val}')
 
@@ -561,7 +562,7 @@ class PPOD(BaseRLModel):
 
         def generate_batch(r_list, io_list, a_list, t_list, w_list, aug=False):
             n = len(t_list)
-            X, Y, I = [], [], []
+            X, Y, T = [], [], []
             while len(X) < self.batch_size:
                 traj_idx = np.random.choice(n)
                 l = r_list[traj_idx].shape[0]
@@ -577,8 +578,6 @@ class PPOD(BaseRLModel):
                         t_start = t_start - tdelta[i]
                     t.append(t_start)
                 t = np.array(t)
-                #t_start = t_action - lookback * tstep
-                #t = np.arange(t_start, t_action, tstep)[:lookback]
                 t = t[::-1][:lookback]
                 t = t[np.where(t >= t_list[traj_idx][0])]
                 t_idx = np.where(t_list[traj_idx] < t_start)[0]
@@ -594,22 +593,21 @@ class PPOD(BaseRLModel):
                     r_ = np.zeros((len(t), 3))
                     for j in range(3):
                         r_[:, j] = np.interp(t, t_list[traj_idx][idx_start:idx_action], r_list[traj_idx][idx_start:idx_action, j])
-                    r = np.vstack([r_list[traj_idx][0, :] * np.ones(lookback - r_.shape[0])[:, None], r_])
+                    xyz = np.vstack([r_list[traj_idx][0, :] * np.ones(lookback - r_.shape[0])[:, None], r_])
 
                     # augment xyz
 
+                    wps = w_action.reshape(1, -1) * np.ones(lookback)[:, None]
+                    r = np.hstack([xyz, wps])
+                    xyz_dim = 3 + wps.shape[1]
                     if aug:
                         for i in range(lookback):
-                            r[i, :] = r[i, :] + np.random.randn(3) * xyz_aug_radius
+                            if np.random.rand() < xyz_aug_prb:
+                                r[i, :] = np.random.rand(xyz_dim)
+                            else:
+                                r[i, :] = np.clip(r[i, :] + np.random.randn(xyz_dim) * xyz_aug_rad, 0, 1)
 
-                    # wp - xyz
-
-                    r_ = []
-                    for wp in w_action:
-                        r_.append(wp - r)
-                    r = np.hstack(r_)
-
-                    # io
+                    # io components
 
                     io_ = np.zeros((len(t), io_dim))
                     for j in range(io_dim):
@@ -621,10 +619,20 @@ class PPOD(BaseRLModel):
 
                     if aug:
                         for i in range(lookback):
-                            if np.random.rand() < inputs_aug_prob:
-                                io[i, :act_dim] = np.random.rand(act_dim)
-                            #if np.random.rand() < outputs_aug_prob:
-                            io[i, act_dim:] = io[i, act_dim:] + np.random.randn(io_dim - act_dim) * outputs_aug_radius
+                            if use_inputs:
+                                if np.random.rand() < in_aug_prb:
+                                    io[i, :act_dim] = np.random.rand(act_dim)
+                                else:
+                                    io[i, :act_dim] = np.clip(io[i, :act_dim] + np.random.randn(act_dim) * in_aug_rad, 0, 1)
+                                if np.random.rand() < out_aug_prb:
+                                    io[i, act_dim:] = np.random.rand(io_dim - act_dim)
+                                else:
+                                    io[i, act_dim:] = np.clip(io[i, act_dim:] + np.random.randn(io_dim - act_dim) * out_aug_rad, 0, 1)
+                            else:
+                                if np.random.rand() < out_aug_prb:
+                                    io[i, :] = np.random.rand(io_dim)
+                                else:
+                                    io[i, :] = np.clip(io[i, :] + np.random.randn(io_dim) * out_aug_rad, 0, 1)
 
                     # x and y
 
@@ -632,27 +640,25 @@ class PPOD(BaseRLModel):
                     y = a_list[traj_idx][idx_action, :]
                     X.append(x)
                     Y.append(y)
-                    if len(t) < lookback:
-                        I.append(0)
-                    else:
-                        I.append(1)
+                    T.append(0)
 
             X = np.array(X)
             Y = np.vstack(Y)
-            I = np.array(I)
-            return X, Y, I
+            T = np.array(t_action)
+            return X, Y, T
 
         batches_tr, batches_val = [], []
         for i in range(nbatches_tr):
-            x, y, I = generate_batch(r_tr, io_tr, a_tr, t_tr, w_tr, aug=True)
-            batches_tr.append((x, y, I))
+            x, y, t = generate_batch(r_tr, io_tr, a_tr, t_tr, w_tr, aug=True)
+            batches_tr.append((x, y, t))
         for i in range(nbatches_val):
-            x, y, I = generate_batch(r_val, io_val, a_val, t_val, w_val)
-            batches_val.append((x, y, I))
+            x, y, t = generate_batch(r_val, io_val, a_val, t_val, w_val, aug=False)
+            batches_val.append((x, y, t))
 
         for epoch in range(nepochs):
 
             train_loss = 0.0
+            train_loss_max = 0.0
             tr_loss_list = []
 
             for x, y, _ in batches_tr:
@@ -662,8 +668,11 @@ class PPOD(BaseRLModel):
                     if isinstance(self.action_space, spaces.Discrete):
                         loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y, logits=action_logits))
                     elif isinstance(self.action_space, spaces.Box):
-                        loss = tf.reduce_mean(tf.square(actions - y))
+                        losses = tf.reduce_mean(tf.square(actions - y), axis=1)
+                        loss = tf.reduce_mean(losses)
+                        loss_max = tf.reduce_max(losses)
                 train_loss += loss
+                train_loss_max += loss_max
                 tr_loss_list.append(loss)
 
                 # Optimization step
@@ -675,15 +684,22 @@ class PPOD(BaseRLModel):
                 self.pretrain_policy.optimizer.apply_gradients(zip(gradients, self.pretrain_policy.trainable_variables))
 
             val_loss = 0.0
+            val_loss_max = 0.0
             val_loss_list = []
 
-            for x, y, I in batches_val:
+            losses = []
+            ts = []
+            for x, y, t in batches_val:
+                ts.append(t)
                 actions, values, log_probs, action_logits = self.pretrain_policy.call(x)
                 if isinstance(self.action_space, spaces.Discrete):
                     loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y, logits=action_logits))
                 elif isinstance(self.action_space, spaces.Box):
-                    loss = tf.reduce_mean(tf.square(actions - y))
+                    losses.append(tf.reduce_mean(tf.square(actions - y), axis=1))
+                    loss = tf.reduce_mean(losses)
+                    loss_max = tf.reduce_max(losses)
                 val_loss += loss
+                val_loss_max += loss_max
                 val_loss_list.append(loss)
 
             val_losses.append(val_loss / nbatches_val)
@@ -692,16 +708,12 @@ class PPOD(BaseRLModel):
 
             # generate one new training batch and substitute the one with the lowest loss value
 
-            #del batches_tr[np.argmin(tr_loss_list)]
-            del batches_tr[0]
-            x, y, I = generate_batch(r_tr, io_tr, a_tr, t_tr, w_tr, aug=True)
-            batches_tr.append((x, y, I))
+            del batches_tr[np.argmin(tr_loss_list)]
+            #del batches_tr[0]
+            x, y, t = generate_batch(r_tr, io_tr, a_tr, t_tr, w_tr, aug=True)
+            batches_tr.append((x, y, t))
 
             # generate one new validation batch and substitute the one with the lowest loss value
-
-            #del batches_val[np.argmin(val_loss_list)]
-            #x, y, I = generate_batch(r_val, io_val, a_val, t_val, w_val)
-            #batches_val.append((x, y, I))
 
             if np.mean(val_losses) < val_loss_min:
                 val_loss_min = np.mean(val_losses)
@@ -712,117 +724,6 @@ class PPOD(BaseRLModel):
                 if patience_count >= patience:
                     self.policy.set_weights(best_weights)
                     print(f'Pretraining has finished with the minimum loss: {val_loss_min}')
-                    break
-
-    def pretrain_recurrent(self, data_tr, data_val, data_tr_lens, data_val_lens, nepochs=10000, patience=100):
-
-        obs_dim = np.prod(self.observation_space.shape)
-        act_dim = self.action_space.shape[0]
-
-        ntrain = len(data_tr_lens)
-        nval = len(data_val_lens)
-        print(f'Training on {ntrain} samples, validating on {nval} samples:')
-
-        # batches
-
-        tr_traj_len_max = np.max(data_tr_lens)
-        nbatches_tr = np.ceil(tr_traj_len_max / self.batch_size)
-        val_traj_len_max = np.max(data_val_lens)
-        nbatches_val = np.ceil(val_traj_len_max / self.batch_size)
-
-        # model
-
-        self.tr_policy = self.policy_class(self.observation_space, self.action_space, self.learning_rate, **self.policy_kwargs, pi_trainable=False, vf_trainable=False, batch_size=ntrain, nsteps=self.batch_size)
-        self.val_policy = self.policy_class(self.observation_space, self.action_space, self.learning_rate, **self.policy_kwargs, pi_trainable=False, vf_trainable=False, batch_size=nval, nsteps=self.batch_size)
-
-        # training batches
-
-        x_tr = np.zeros((ntrain, nbatches_tr * self.batch_size, obs_dim))
-        y_tr = np.zeros((ntrain, nbatches_val * self.batch_size, act_dim))
-        idx_start = 0
-        batch_idx = 0
-        for l in data_tr_lens:
-            idx = np.arange(idx_start, idx_start + l)
-            expert_obs, expert_actions = data_tr[idx, :obs_dim], data_tr[idx, obs_dim:obs_dim + act_dim]
-            x_tr[batch_idx, :len(idx), :] = expert_obs
-            y_tr[batch_idx, :len(idx), :] = expert_actions
-            batch_idx += 1
-            idx_start = idx_start + l
-
-        # validation batches
-
-        x_val = np.zeros((nval, val_traj_len_max, obs_dim))
-        y_val = np.zeros((nval, val_traj_len_max, act_dim))
-        idx_start = 0
-        batch_idx = 0
-        for l in data_val_lens:
-            idx = np.arange(idx_start, idx_start + l)
-            expert_obs, expert_actions = data_val[idx, :obs_dim], data_val[idx, obs_dim:obs_dim + act_dim]
-            x_val[batch_idx, :len(idx), :] = expert_obs
-            y_val[batch_idx, :len(idx), :] = expert_actions
-            batch_idx += 1
-            idx_start = idx_start + l
-
-        # early stoping init
-
-        val_losses = deque(maxlen=10)
-        patience_count = 0
-        val_loss_min = np.inf
-        best_weights = None
-
-        # main loop
-
-        for epoch in range(nepochs):
-
-            # training
-
-            train_loss = 0.0
-            for i in range(nbatches_tr):
-                x, y = x_tr[:, i*self.batch_size:(i+1)*self.batch_size, :], y_tr[:, i, :]
-                with tf.GradientTape() as tape:
-                    tape.watch(self.tr_policy.trainable_variables)
-                    actions, values, log_probs, action_logits = self.tr_policy.call(x, training=True)
-                    loss = tf.reduce_mean(tf.square(actions - y))
-                train_loss += loss
-
-                # Optimization step
-
-                gradients = tape.gradient(loss, self.tr_policy.trainable_variables)
-
-                # Clip grad norm
-
-                self.tr_policy.optimizer.apply_gradients(zip(gradients, self.tr_policy.trainable_variables))
-
-            self.tr_policy.features_extractor.reset_state()
-
-            # transfer weights
-
-            self.val_policy.set_weights(self.tr_policy.get_weights())
-
-            # validation
-
-            val_loss = 0.0
-            for i in range(val_traj_len_max):
-                x, y = x_val[:, i:i + 1, :], y_val[:, i, :]
-                actions, values, log_probs, action_logits = self.val_policy.call(x)
-                loss = tf.reduce_mean(tf.square(actions - y))
-                val_loss += loss
-
-            self.val_policy.features_extractor.reset_state()
-
-            val_losses.append(val_loss / (nval * val_traj_len_max))
-
-            print(f'At epoch {epoch + 1}/{nepochs}, train loss is {train_loss / (ntrain * tr_traj_len_max)}, '
-                  f'validation loss is {val_loss / (nval * val_traj_len_max)}, patience is {patience_count + 1}/{patience}')
-
-            if np.mean(val_losses) < val_loss_min:
-                val_loss_min = np.mean(val_losses)
-                patience_count = 0
-                best_weights = self.tr_policy.get_weights()
-            else:
-                patience_count += 1
-                if patience_count >= patience:
-                    self.policy.set_weights(best_weights)
                     break
 
     def save(self, path, name):

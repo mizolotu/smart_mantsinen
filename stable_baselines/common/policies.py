@@ -234,80 +234,9 @@ class MlpExtractor(Model):
         return self.policy_net(shared_latent), self.value_net(shared_latent)
 
 
-class FeatureExtractor_(Model):
-
-    def __init__(self, lookback, net_arch, activation_fn, batchnorm=True, shared_trainable=True, vf_trainable=True, pi_trainable=True):
-        super(FeatureExtractor_, self).__init__()
-
-        shared_net, policy_net, value_net = [], [], []
-        policy_only_layers = []  # Layer sizes of the network that only belongs to the policy network
-        value_only_layers = []  # Layer sizes of the network that only belongs to the value network
-
-        # Iterate through the shared layers and build the shared parts of the network
-
-        for idx, layer in enumerate(net_arch):
-            if isinstance(layer, int):  # Check that this is a shared layer
-                layer_size = layer
-
-                # TODO: give layer a meaningful name
-                # shared_net.append(layers.Dense(layer_size, input_shape=(last_layer_dim_shared,), activation=activation_fn))
-
-                if batchnorm:
-                    shared_net.append(layers.BatchNormalization(trainable=shared_trainable))
-                shared_net.append(layers.Dense(layer_size, activation=activation_fn, trainable=shared_trainable))
-            else:
-                assert isinstance(layer, dict), "Error: the net_arch list can only contain ints and dicts"
-                if 'pi' in layer:
-                    assert isinstance(layer['pi'], list), "Error: net_arch[-1]['pi'] must contain a list of integers."
-                    policy_only_layers = layer['pi']
-
-                if 'vf' in layer:
-                    assert isinstance(layer['vf'], list), "Error: net_arch[-1]['vf'] must contain a list of integers."
-                    value_only_layers = layer['vf']
-                break  # From here on the network splits up in policy and value network
-
-        shared_net.append(layers.Flatten())
-        last_layer_dim_shared = layer_size * lookback
-
-        last_layer_dim_pi = last_layer_dim_shared
-        last_layer_dim_vf = last_layer_dim_shared
-
-        # Build the non-shared part of the network
-
-        for idx, (pi_layer_size, vf_layer_size) in enumerate(zip_longest(policy_only_layers, value_only_layers)):
-            if pi_layer_size is not None:
-                assert isinstance(pi_layer_size, int), "Error: net_arch[-1]['pi'] must only contain integers."
-                policy_net.append(layers.Dense(pi_layer_size, input_shape=(last_layer_dim_pi,), activation=activation_fn, trainable=pi_trainable))
-                last_layer_dim_pi = pi_layer_size
-
-            if vf_layer_size is not None:
-                assert isinstance(vf_layer_size, int), "Error: net_arch[-1]['vf'] must only contain integers."
-                value_net.append(layers.Dense(vf_layer_size, input_shape=(last_layer_dim_vf,), activation=activation_fn, trainable=vf_trainable))
-                last_layer_dim_vf = vf_layer_size
-
-        # Save dim, used to create the distributions
-
-        self.latent_dim_pi = last_layer_dim_pi
-        self.latent_dim_vf = last_layer_dim_vf
-
-        # Create networks
-        # If the list of layers is empty, the network will just act as an Identity module
-
-        self.shared_net = Sequential(shared_net)
-        self.policy_net = Sequential(policy_net)
-        self.value_net = Sequential(value_net)
-
-    def call(self, features):
-        """
-        :return: (tf.Tensor, tf.Tensor) latent_policy, latent_value of the specified network.
-            If all layers are shared, then ``latent_policy == latent_value``
-        """
-        shared_latent = self.shared_net(features)
-        return self.policy_net(shared_latent), self.value_net(shared_latent)
-
 class FeatureExtractor(Model):
 
-    def __init__(self, net_arch, activation_fn, shared_trainable=True, vf_trainable=True, pi_trainable=True, dropout=0.5, gn_std=0.0, l1=1e-9, l2=1e-10):
+    def __init__(self, net_arch, activation_fn, shared_trainable=True, vf_trainable=True, pi_trainable=True, dropout=0.5, gn_std=0.05, l1=1e-4, l2=1e-5, action_scale=1.0):
         super(FeatureExtractor, self).__init__()
 
         self.shared_trainable = shared_trainable
@@ -316,8 +245,8 @@ class FeatureExtractor(Model):
 
         self.shared_net, self.policy_net, self.value_net = [], [], []
         self.shared_net_bn, self.policy_net_bn, self.value_net_bn = [], [], []
-        self.shared_net_gn = []
-        self.shared_net_do = []
+        self.shared_net_gn, self.policy_net_gn, self.value_net_gn = [], [], []
+        self.shared_net_do, self.policy_net_do, self.value_net_do = [], [], []
         policy_only_layers = []  # Layer sizes of the network that only belongs to the policy network
         value_only_layers = []  # Layer sizes of the network that only belongs to the value network
 
@@ -327,7 +256,6 @@ class FeatureExtractor(Model):
         splitted_part = [layer for layer in net_arch if isinstance(layer, dict)]
 
         assert len(shared_part) > 0, 'shared part should contain at least one layer'
-        assert shared_part[-1][0] == 'dense', 'The last layer in the shared part should be dense'
 
         for idx, layer in enumerate(shared_part[:-1]):
             if isinstance(layer, tuple):
@@ -343,15 +271,6 @@ class FeatureExtractor(Model):
                         bias_regularizer=tf.keras.regularizers.l2(l2),
                         trainable=shared_trainable
                     ))
-                elif layer_type == 'bilstm':
-                    nunits = layer[1]
-                    rseq = layer[2]
-                    self.shared_net.append(layers.Bidirectional(layers.LSTM(
-                        nunits, return_sequences=rseq, activation=activation_fn,
-                        kernel_regularizer=tf.keras.regularizers.l1_l2(l1=l1, l2=l2),
-                        bias_regularizer=tf.keras.regularizers.l2(l2),
-                        trainable=shared_trainable
-                    )))
                 elif layer_type == 'conv1d':
                     nfilters = layer[1]
                     kernel_size = layer[2]
@@ -427,6 +346,8 @@ class FeatureExtractor(Model):
                 ))
                 last_layer_dim_pi = pi_layer_size
                 self.policy_net_bn.append(layers.BatchNormalization())
+                self.policy_net_do.append(layers.Dropout(dropout))
+                self.policy_net_gn.append(layers.GaussianNoise(gn_std))
 
             if vf_layer_size is not None:
                 assert isinstance(vf_layer_size, int), "Error: net_arch[-1]['vf'] must only contain integers."
@@ -436,6 +357,8 @@ class FeatureExtractor(Model):
                 ))
                 last_layer_dim_vf = vf_layer_size
                 self.value_net_bn.append(layers.BatchNormalization())
+                self.value_net_do.append(layers.Dropout(dropout))
+                self.value_net_gn.append(layers.GaussianNoise(gn_std))
 
         # save dim, used to create the distributions
 
@@ -465,16 +388,20 @@ class FeatureExtractor(Model):
         # pi layers
 
         pi_latent = shared_latent
-        for l, bn in zip(self.policy_net, self.policy_net_bn):
+        for l, bn, gn, do in zip(self.policy_net, self.policy_net_bn, self.policy_net_gn, self.policy_net_do):
             pi_latent = bn(pi_latent, training & self.pi_trainable)
+            pi_latent = gn(pi_latent, training & self.pi_trainable)
             pi_latent = l(pi_latent)
+            pi_latent = do(pi_latent, training & self.pi_trainable)
 
         # vf layers
 
         vf_latent = shared_latent
-        for l, bn in zip(self.value_net, self.value_net_bn):
+        for l, bn, gn, do in zip(self.value_net, self.value_net_bn, self.value_net_gn, self.value_net_do):
             vf_latent = bn(vf_latent, training & self.vf_trainable)
+            vf_latent = gn(vf_latent, training & self.vf_trainable)
             vf_latent = l(vf_latent)
+            vf_latent = do(vf_latent, training & self.vf_trainable)
 
         return pi_latent, vf_latent
 
@@ -482,7 +409,7 @@ class FeatureExtractor(Model):
 class LstmExtractor(Model):
 
     def __init__(self, net_arch, activation_fn, shared_trainable=True, vf_trainable=True, pi_trainable=True,
-                 dropout=0.5, gn_std=0.05):
+                 dropout=0.5, gn_std=0.0):
         super(LstmExtractor, self).__init__()
 
         self.shared_trainable = shared_trainable

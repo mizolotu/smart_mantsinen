@@ -68,7 +68,10 @@ class PPOPolicy(BasePolicy):
 
     def _build(self, learning_rate):
 
-        self.features_extractor = FeatureExtractor(net_arch=self.net_arch, activation_fn=self.activation_fn, shared_trainable=self.shared_trainable, vf_trainable=self.vf_trainable, pi_trainable=self.pi_trainable)
+        self.features_extractor = FeatureExtractor(
+            net_arch=self.net_arch, activation_fn=self.activation_fn, action_scale=self.action_scale,
+            shared_trainable=self.shared_trainable, vf_trainable=self.vf_trainable, pi_trainable=self.pi_trainable
+        )
 
         latent_dim_pi = self.features_extractor.latent_dim_pi
 
